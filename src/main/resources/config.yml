@@ -1,0 +1,5 @@
+settings:
+  enforce-names-every-ticks: 100
+  altitude-hypoxia-y: 300
+  barrier-death-seconds: 10
+  low-y-ore-floor: 0   # reserved, unused

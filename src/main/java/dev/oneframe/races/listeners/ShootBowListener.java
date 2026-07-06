@@ -1,0 +1,32 @@
+package dev.oneframe.races.listeners;
+
+import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.RaceManager;
+import dev.oneframe.races.races.demon.BlazebornFlamingArrowsAbility;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityShootBowEvent;
+
+public final class ShootBowListener implements Listener {
+
+    private final RaceManager raceManager;
+
+    public ShootBowListener(RaceManager raceManager) {
+        this.raceManager = raceManager;
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onShoot(EntityShootBowEvent event) {
+        if (!(event.getEntity() instanceof Player shooter)) {
+            return;
+        }
+        raceManager.getActiveRace(shooter).ifPresent(race -> {
+            for (Ability ability : race.abilities()) {
+                if (ability instanceof BlazebornFlamingArrowsAbility a) {
+                    a.onShoot(event);
+                }
+            }
+        });
+    }
+}

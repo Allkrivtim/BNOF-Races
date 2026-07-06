@@ -1,0 +1,20 @@
+name: OneFrameRaces
+version: '${version}'
+main: dev.oneframe.races.OneFrameRacesPlugin
+api-version: '1.21'
+author: OneFrame
+description: Pluggable player-race system for the OneFrame server.
+
+commands:
+  race:
+    description: Manage player races.
+    usage: /race <list|info|get|set|clear|reload>
+    permission: oneframe.race.self
+
+permissions:
+  oneframe.race.self:
+    default: true
+    description: Allows viewing race info and your own race.
+  oneframe.race.admin:
+    default: op
+    description: Allows assigning/clearing races and reloading the registry.
