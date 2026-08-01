@@ -22,6 +22,7 @@ public final class BlazebornOutsideNetherAbility implements TickAbility {
             return;
         }
         player.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 60, 0, true, false));
+        player.setNoDamageTicks(0);
         player.damage(DAMAGE_PER_PASS);
     }
 }

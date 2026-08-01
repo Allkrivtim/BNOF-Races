@@ -108,11 +108,12 @@ public final class ForesterBreedAbility implements Ability {
     /** Called from the central breed listener (after the event resolves) - spawns a second baby. */
     public void onBreed(EntityBreedEvent event) {
         LivingEntity original = event.getEntity();
-        original.getWorld().spawn(original.getLocation(), original.getClass(), spawned -> {
-            if (spawned instanceof Ageable ageable) {
-                ageable.setBaby();
-            }
-        });
+        // spawnEntity by EntityType, not spawn(loc, original.getClass()): getClass() returns the
+        // CraftBukkit implementation class (e.g. CraftCow), which CraftRegionAccessor rejects.
+        Entity spawned = original.getWorld().spawnEntity(original.getLocation(), original.getType());
+        if (spawned instanceof Ageable ageable) {
+            ageable.setBaby();
+        }
     }
 }
 ```
@@ -120,9 +121,8 @@ public final class ForesterBreedAbility implements Ability {
 - `implements Ability` — этот класс реализует только базовый интерфейс `Ability` (не `PassiveEffectAbility`, не `TickAbility`), потому что его логика привязана к конкретному игровому событию (`EntityBreedEvent`), а не к постоянным эффектам или к периодическому тику. Метод `onBreed` — не часть какого-либо интерфейса, это **специфичный для этого класса** метод; его вызывает [`BreedListener`](13-listeners.md) через `instanceof ForesterBreedAbility`.
 - `EntityBreedEvent` — Bukkit-событие, которое наступает, когда два животных **уже успешно** заспавнили детёныша (то есть само событие не про "попытку скормить корм", а именно про факт рождения одного детёныша) — важно: обработчик срабатывает **после** того, как ванильная механика уже создала одного детёныша, наша задача — досоздать второго.
 - `event.getEntity()` — здесь возвращает **исходного** (уже родившегося) детёныша (в терминах API `EntityBreedEvent extends EntityEvent`, и `getEntity()` — это и есть тот самый, первый, детёныш).
-- `original.getWorld().spawn(original.getLocation(), original.getClass(), spawned -> {...})` — вызов метода `World#spawn`, одной из нескольких перегрузок этого метода в Bukkit API: принимает локацию, **класс** сущности для создания (мы передаём `original.getClass()` — то есть тип **того же самого** животного, что и первый детёныш: если родилась корова, спавним ещё одну корову) и `Consumer`-колбэк, который вызывается **сразу после** создания новой сущности, но до того, как она официально "появится" в мире — это стандартный способ Bukkit API донастроить сущность перед тем, как она станет видимой игрокам.
-- `if (spawned instanceof Ageable ageable) { ageable.setBaby(); }` — **зачем это нужно:** без явного вызова `setBaby()` заспавненная сущность появилась бы **взрослой** особью, а не детёнышем (метод `World#spawn` по умолчанию не знает, что нам нужна именно "молодая" версия существа) — `Ageable` — интерфейс Bukkit API для любых существ, которые могут быть "молодыми" или "взрослыми" (коровы, овцы, куры и т.д.), `setBaby()` — явно перевести существо в состояние детёныша.
-- **Подводный камень:** этот подход полагается на то, что у сущности есть публичный конструктор, совместимый с сигнатурой `spawn(Location, Class<T>, Consumer<T>)`, что верно для всех стандартных заводных (breedable) животных Minecraft, но теоретически может не сработать для экзотических кастомных сущностей других плагинов — для built-in животных ванильного Minecraft это не проблема.
+- `original.getWorld().spawnEntity(original.getLocation(), original.getType())` — спавним второго детёныша того же **типа** (`EntityType` — enum-идентификатор вида существа: `COW`, `SHEEP` и т.д.). **Важный урок из реального бага:** первоначальная версия использовала перегрузку `spawn(Location, Class<T>)` с `original.getClass()` — и падала в рантайме с `IllegalArgumentException: Cannot spawn an entity from its CraftBukkit implementation class 'CraftCow'`. Причина: `getClass()` живого объекта возвращает **класс реализации** CraftBukkit (`org.bukkit.craftbukkit.entity.CraftCow`), а не Bukkit-интерфейс (`org.bukkit.entity.Cow`), который ожидает API. Правильные варианты: либо `spawnEntity(loc, entity.getType())` (использовано здесь), либо `spawn(loc, entity.getType().getEntityClass())` — сама ошибка Paper прямо подсказывает второй.
+- `if (spawned instanceof Ageable ageable) { ageable.setBaby(); }` — **зачем это нужно:** без явного вызова `setBaby()` заспавненная сущность появилась бы **взрослой** особью, а не детёнышем — `Ageable` — интерфейс Bukkit API для любых существ, которые могут быть "молодыми" или "взрослыми" (коровы, овцы, куры и т.д.), `setBaby()` — явно перевести существо в состояние детёныша.
 
 ### `ForesterFishingAbility.java`
 

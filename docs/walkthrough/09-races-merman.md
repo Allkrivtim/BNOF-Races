@@ -105,6 +105,7 @@ public final class MermanLandSuffocationAbility implements TickAbility {
         if (current > 0) {
             airLevel.put(id, Math.max(0, current - DRAIN_PER_PASS));
         } else {
+            player.setNoDamageTicks(0);
             player.damage(SUFFOCATION_DAMAGE);
         }
     }
@@ -116,7 +117,8 @@ public final class MermanLandSuffocationAbility implements TickAbility {
 - Если игрок в воде **или** под дождём — запас кислорода мгновенно восстанавливается до максимума (`airLevel.put(id, MAX_AIR)`), и метод завершается (`return`) — дальнейшая логика урона в этом проходе не выполняется.
 - Если ни то, ни другое (сухая суша) — читаем текущее значение (`getOrDefault(id, MAX_AIR)` — на случай, если по какой-то причине запись отсутствует, берём полный запас как безопасное значение по умолчанию, а не `0`, чтобы не наносить мгновенный урон новому/непроинициализированному игроку).
 - `if (current > 0)` — если запас ещё не исчерпан, уменьшаем его на `DRAIN_PER_PASS`, но не ниже нуля (`Math.max(0, ...)`, защита от отрицательных значений).
-- `else { player.damage(SUFFOCATION_DAMAGE); }` — если запас уже на нуле, наносим "удушающий" урон каждый проход, пока игрок остаётся на суше без дождя. `player.damage(double)` — прямой вызов урона существу без указания источника/атакующего — Bukkit в таком случае сообщит причину урона как что-то вроде "магический"/"кастомный" урон во внутреннем событии `EntityDamageEvent` (конкретная причина зависит от версии реализации Paper), это приемлемо, поскольку у урона нет естественного "источника" в терминах ванильных причин.
+- `else { player.setNoDamageTicks(0); player.damage(SUFFOCATION_DAMAGE); }` — если запас уже на нуле, наносим "удушающий" урон каждый проход, пока игрок остаётся на суше без дождя. `player.damage(double)` — прямой вызов урона существу без указания источника/атакующего.
+- **`setNoDamageTicks(0)` перед `damage()` — обязательный приём для всего периодического урона в плагине:** после любого полученного урона у существа ~10 тиков "кадров неуязвимости" (i-frames), в течение которых повторный урон **той же или меньшей величины полностью игнорируется** движком. Если игрок одновременно, например, под Poison/Wither (которые сами тикают уроном), наш периодический `damage()` попадал бы в это окно и "съедался" — эффект выглядел бы как "урон не работает" (реальный баг, пойманный на плейтесте у Blazeborn). Обнуление счётчика неуязвимости прямо перед нанесением гарантирует, что урон пройдёт.
 
 ## `MermanConditionalEffectsAbility.java` — бонусы в воде/дожде
 
@@ -135,7 +137,7 @@ public final class MermanConditionalEffectsAbility implements TickAbility {
 
     @Override
     public String description() {
-        return "В воде/под дождём - Night Vision, Dolphin's Grace, Haste и полный кислород.";
+        return "В воде/под дождём - Night Vision, Dolphin's Grace, Haste II и полный кислород.";
     }
 
     @Override
@@ -146,14 +148,14 @@ public final class MermanConditionalEffectsAbility implements TickAbility {
         player.setRemainingAir(player.getMaximumAir());
         player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, DURATION_TICKS, 0, true, false));
         player.addPotionEffect(new PotionEffect(PotionEffectType.DOLPHINS_GRACE, DURATION_TICKS, 0, true, false));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, DURATION_TICKS, 0, true, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, DURATION_TICKS, 1, true, false));
     }
 }
 ```
 
 - `DURATION_TICKS = 60` — 3 секунды. **Ключевая идея:** длительность каждого эффекта **короче**, чем интервал между тиками способности (тик раз в секунду, а эффект держится 3 секунды) — сделано специально: если игрок **выходит** из воды/дождя, способность просто перестаёт обновлять (`refresh`) эффект каждую секунду, и он естественным образом угасает через оставшиеся до 3 секунд — то есть отдельно писать код "убрать эффект, если условие больше не выполняется" не нужно, эффект просто "истекает сам" при прекращении обновления. Это — распространённый в Bukkit-плагинах приём, экономящий явную логику снятия эффектов.
 - `player.setRemainingAir(player.getMaximumAir())` — это **ванильный** запас воздуха игрока (не наш собственный `airLevel` из предыдущего класса!) — здесь он принудительно выставляется на максимум (`getMaximumAir()`, обычно 300 у игрока по умолчанию — да, число совпадает с нашей константой `MAX_AIR`, но это два **разных** счётчика, просто выбрано одинаковое "круглое" число). Технически это может быть избыточно (в воде и так постоянное дыхание за счёт пассивки Water Breathing, ванильный воздух и не должен тратиться), но это явная защитная мера "полный кислород" из ТЗ, гарантирующая, что даже если что-то пошло не так с пассивным эффектом, ванильный запас воздуха всё равно на максимуме.
-- Три эффекта — `NIGHT_VISION` (ночное зрение), `DOLPHINS_GRACE` (грация дельфина — ускоренное плавание), `HASTE` (ускоренная добыча блоков — это и есть требуемое ТЗ "ускоренная добыча") — каждый с амплификатором `0` (уровень I), `ambient=true, particles=false`.
+- Три эффекта — `NIGHT_VISION` (ночное зрение), `DOLPHINS_GRACE` (грация дельфина — ускоренное плавание) с амплификатором `0` (уровень I), и `HASTE` (ускоренная добыча блоков) с амплификатором `1` (**уровень II** — поднят с I по итогам плейтеста: Haste I недостаточно компенсировал ванильный 5-кратный штраф скорости добычи под водой), `ambient=true, particles=false`.
 - Если условие (`isInWater() || isInRain()`) не выполняется — метод сразу выходит (`return`) без каких-либо действий; никакого "снятия" эффектов явно не происходит — они просто со временем истекут сами (см. предыдущий абзац).
 
 ## `MermanNetherFireAbility.java` — лёгкое горение в Nether
@@ -391,17 +393,17 @@ public final class FuguProvider implements RaceProvider {
     @Override
     public List<Ability> abilities() {
         List<Ability> abilities = new ArrayList<>(MermanShared.sharedAbilities());
-        abilities.add(new SimplePassiveEffectAbility("Постоянные Dolphin's Grace, Resistance и Slowness.",
+        abilities.add(new SimplePassiveEffectAbility("Постоянные Dolphin's Grace, Resistance III и Slowness IV.",
                 new PotionEffect(PotionEffectType.DOLPHINS_GRACE, PotionEffect.INFINITE_DURATION, 0, true, false),
-                new PotionEffect(PotionEffectType.RESISTANCE, PotionEffect.INFINITE_DURATION, 0, true, false),
-                new PotionEffect(PotionEffectType.SLOWNESS, PotionEffect.INFINITE_DURATION, 0, true, false)));
+                new PotionEffect(PotionEffectType.RESISTANCE, PotionEffect.INFINITE_DURATION, 2, true, false),
+                new PotionEffect(PotionEffectType.SLOWNESS, PotionEffect.INFINITE_DURATION, 3, true, false)));
         abilities.add(new FuguPoisonTouchAbility());
         return abilities;
     }
 ```
 
 - Тот же паттерн, что у Marinian: копия общего списка + собственная пассивка + собственная активная способность.
-- Пассивка Fugu — **сразу три** постоянных эффекта (Dolphin's Grace + Resistance + Slowness) в одном вызове `SimplePassiveEffectAbility` благодаря varargs-конструктору (см. [03-core-interfaces.md](03-core-interfaces.md)) — соответствует ТЗ буквально ("Dolphin's Grace + Resistance + Slowness"), отражая образ медлительной, но защищённой рыбы-собаки.
+- Пассивка Fugu — **сразу три** постоянных эффекта в одном вызове `SimplePassiveEffectAbility` благодаря varargs-конструктору (см. [03-core-interfaces.md](03-core-interfaces.md)): Dolphin's Grace I (амплификатор `0`), **Resistance III** (амплификатор `2`) и **Slowness IV** (амплификатор `3`) — конкретные уровни зафиксированы по итогам плейтеста (изначально оба были уровня I), отражая образ очень медлительной, но крайне защищённой рыбы-собаки. Снова помните правило "амплификатор = уровень − 1".
 - `FuguPoisonTouchAbility` создаётся напрямую внутри `List.of(...)` (не хранится в поле, как у Marinian), потому что у неё **нет** собственного внутреннего состояния (нет кулдаунов, карт по игрокам и т.п.) — пересоздание нового экземпляра при каждом вызове `abilities()` абсолютно безопасно.
 
 ```java

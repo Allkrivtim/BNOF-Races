@@ -69,6 +69,7 @@ public final class AltitudeHypoxiaRule implements PlayerTickRule {
         if (current > 0) {
             airLevel.put(id, Math.max(0, current - DRAIN_PER_PASS));
         } else {
+            player.setNoDamageTicks(0);
             player.damage(DAMAGE);
         }
     }
@@ -77,7 +78,7 @@ public final class AltitudeHypoxiaRule implements PlayerTickRule {
 
 - `raceManager.getActiveRace(player).map(race -> race.exemptionFlags().contains(ExemptionFlag.ALTITUDE_HYPOXIA)).orElse(false)` — идиома работы с `Optional`: если у игрока есть активная раса, проверяем флаг; если расы нет вообще — `orElse(false)` (не освобождён, обычный игрок без расы подчиняется всем глобальным правилам).
 - `exempt || player.getLocation().getY() <= config.altitudeHypoxiaY()` — гипоксия действует, только если игрок **и** не освобождён по флагу, **и** находится **выше** порога (`getY() > altitudeHypoxiaY()` — обратное условие, отсюда `<=` в проверке "не должно происходить"). Если хотя бы одно из двух условий не выполняется (освобождён ИЛИ ниже порога) — воздух сразу восполняется на максимум, аналогично тому, как `MermanLandSuffocationAbility` восполняет запас в воде/дожде.
-- Оставшаяся логика (истощение → урон) идентична разобранной в [09-races-merman.md](09-races-merman.md).
+- Оставшаяся логика (истощение → урон, включая `setNoDamageTicks(0)` перед `damage()` — сброс кадров неуязвимости, чтобы периодический урон не "съедался" i-frames от других источников) идентична разобранной в [09-races-merman.md](09-races-merman.md).
 
 ## Правило 2: `DeepslateNoDropRule.java` — deepslate без дропа
 
@@ -338,7 +339,7 @@ public final class ForbiddenEnchantRule implements Listener, PlayerTickRule {
 - Перебираем **все четыре** запрещённых чара из `EnchantPools.FORBIDDEN` и для каждого, который реально присутствует на предмете, удаляем его.
 - `boolean changed` — флаг, отслеживающий, было ли реально что-то изменено. `if (changed) { stack.setItemMeta(meta); }` — вызываем "дорогую" операцию `setItemMeta` только если реально что-то поменялось, а не на каждый предмет без разбора — небольшая, но осмысленная оптимизация (для предметов без запрещённых чар вообще, коих подавляющее большинство в любом луте, лишнего вызова не происходит).
 
-## Правило 5: `PortalLockdownRule.java` — блокировка порталов
+## Правило 5: `PortalLockdownRule.java` — блокировка Края
 
 ```java
 package dev.oneframe.races.rules;
@@ -352,17 +353,23 @@ import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.world.PortalCreateEvent;
 
-/** Global rule 5: no new Nether/End portals, no End-portal activation via Ender Eye, no End teleport. */
+/**
+ * Global rule 5: the End is fully locked (no platform creation, no Ender Eye activation,
+ * no End-portal teleport). Nether portals are allowed - lighting a frame and the automatic
+ * exit-pair creation both work (relaxed from the original spec after playtesting).
+ */
 public final class PortalLockdownRule implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPortalCreate(PortalCreateEvent event) {
-        event.setCancelled(true);
+        if (event.getReason() == PortalCreateEvent.CreateReason.END_PLATFORM) {
+            event.setCancelled(true);
+        }
     }
 ```
 
-- `PortalCreateEvent` — наступает при попытке **создать** портал любого типа: обычный портал в Нижний мир (например, когда игрок поджёг рамку из обсидиана), портал в Край (активация через рамки с глазами Края), или переход в межпространственный портал, "создаваемый" самим сервером на другой стороне при первом переходе (Bukkit генерирует это событие даже для автоматического создания зеркального портала на другой стороне, если его ещё не было).
-- `event.setCancelled(true)` — **безусловно** отменяем **любое** создание портала, без проверки причины (`event.getReason()`, доступной через `PortalCreateEvent.CreateReason` — в коде эта проверка не используется, потому что требование ТЗ — "отключить Край и новые Nether-порталы" полностью, без исключений).
+- `PortalCreateEvent` — наступает при попытке **создать** портал: поджиг рамки из обсидиана (`CreateReason.FIRE`), автоматическое создание зеркального портала на другой стороне при первом переходе (`CreateReason.NETHER_PAIR`), или создание обсидиановой платформы в Крае при входе туда (`CreateReason.END_PLATFORM`).
+- **История изменения:** в первой версии здесь стоял безусловный `setCancelled(true)` — блокировались **все** порталы, включая Nether, строго по исходному ТЗ. Плейтест показал, что это ломает нормальную игру (рамка портала в ад "не работала": поджиг отменялся, а при проходе через admin-размещённый портал сервер не мог создать выходную пару из-за отменённого `NETHER_PAIR`). Правило смягчено: теперь отменяется **только** `END_PLATFORM` — Nether-порталы (и поджиг, и автосоздание пары) работают как в ванилле, а Край остаётся полностью недоступен за счёт трёх независимых блокировок (платформа здесь + телепорт + глаз Края ниже).
 
 ```java
     @EventHandler(ignoreCancelled = true)
@@ -374,7 +381,7 @@ public final class PortalLockdownRule implements Listener {
 ```
 
 - `PlayerPortalEvent` — наступает, когда игрок непосредственно **телепортируется** через уже существующий портал (в отличие от `PortalCreateEvent`, который про создание нового). `PlayerPortalEvent extends PlayerTeleportEvent` — то есть у него есть `getCause()`, унаследованный от родителя.
-- `TeleportCause.END_PORTAL` — конкретная причина телепортации именно через портал Края (в отличие, например, от `NETHER_PORTAL`). Проверка блокирует **только** переход через портал Края — что соответствует ТЗ ("телепорт в End-портал"); Nether-порталы новые всё равно не могут быть **созданы** (см. первый обработчик выше), но если бы уже существующий (например, оставшийся с более раннего времени работы сервера, до установки плагина) Nether-портал использовался — это событие его бы не тронуло, блокируется только End.
+- `TeleportCause.END_PORTAL` — конкретная причина телепортации именно через портал Края (в отличие, например, от `NETHER_PORTAL`). Проверка блокирует **только** переход через портал Края; телепортация через Nether-порталы (`NETHER_PORTAL`) проходит свободно — это согласуется с ослабленным первым обработчиком выше.
 
 ```java
     @EventHandler(ignoreCancelled = true)
@@ -394,7 +401,7 @@ public final class PortalLockdownRule implements Listener {
 - `event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null` — интересует нас только клик правой кнопкой именно **по блоку** (не клик по воздуху, не левый клик) и только если кликнутый блок вообще известен (защита от `null`).
 - `event.getItem() != null && event.getItem().getType() == Material.ENDER_EYE` — проверяем, что в руке у игрока именно "глаз Края" (`ENDER_EYE`).
 - `event.getClickedBlock().getType() == Material.END_PORTAL_FRAME` — а кликнутый блок — рамка портала Края (`END_PORTAL_FRAME`, тот самый блок, куда вставляются глаза Края, чтобы активировать портал).
-- Если оба условия истинны — это именно попытка активировать портал Края глазом Края — отменяем. **Зачем это нужно отдельно, если уже есть блокировка `PortalCreateEvent`/`PlayerPortalEvent`?** Активация портала Края глазом — это не "создание портала" в терминах `PortalCreateEvent` (портал Края физически уже существует в структуре крепости, глаза лишь "включают" уже готовые блоки портала визуально и функционально) — то есть без этого отдельного обработчика игрок технически мог бы визуально "активировать" портал (превратить рамки в работающий портал), даже если сама телепортация через него потом блокировалась бы вторым обработчиком — то есть портал выглядел бы рабочим, хотя телепорт бы не сработал. Эта явная блокировка предотвращает даже саму активацию, а не только последующий переход.
+- Если оба условия истинны — это именно попытка активировать портал Края глазом Края — отменяем. **Зачем это нужно отдельно, если уже есть блокировка телепорта?** Активация портала Края глазом — это не "создание портала" в терминах `PortalCreateEvent` (портал Края физически уже существует в структуре крепости, глаза лишь "включают" уже готовые блоки портала визуально и функционально) — без этого обработчика игрок мог бы визуально "активировать" портал, даже если сама телепортация потом блокировалась бы вторым обработчиком — портал выглядел бы рабочим, хотя телепорт бы не сработал. Эта явная блокировка предотвращает даже саму активацию.
 
 ## Правило 6: `TradeLockdownRule.java` — блокировка торговли
 

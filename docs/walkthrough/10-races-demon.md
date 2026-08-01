@@ -74,6 +74,7 @@ public final class BlazebornOutsideNetherAbility implements TickAbility {
             return;
         }
         player.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 60, 0, true, false));
+        player.setNoDamageTicks(0);
         player.damage(DAMAGE_PER_PASS);
     }
 }
@@ -81,6 +82,7 @@ public final class BlazebornOutsideNetherAbility implements TickAbility {
 
 - Логика "инвертирована" по сравнению с `MermanNetherFireAbility`: там условие срабатывает **внутри** Nether, здесь — если игрок **вне** Nether (`return`, если он всё-таки в Nether — досрочный выход, ничего не делаем).
 - `new PotionEffect(PotionEffectType.WITHER, 60, 0, ...)` — 60 тиков (3 секунды) Wither амплификатора `0` (уровень I — "слабый Wither" из ТЗ), обновляемый каждую секунду (аналогичный приём "короче интервала обновления" разобран в [09-races-merman.md](09-races-merman.md) — если игрок зайдёт в Nether, эффект просто перестанет обновляться и погаснет сам через оставшиеся до 3 секунд).
+- `player.setNoDamageTicks(0)` перед `damage()` — сброс кадров неуязвимости, обязательный для периодического урона (подробное объяснение механики i-frames — в [09-races-merman.md](09-races-merman.md), там она разобрана при первом появлении). Здесь особенно критично: сам Wither-эффект строчкой выше тоже периодически наносит урон, и без сброса наш `1.0` урона регулярно попадал бы в окно неуязвимости от тика Wither и не проходил.
 - `player.damage(DAMAGE_PER_PASS)` — отдельно (не через Wither-эффект, который и сам наносит урон по своим правилам движка) наносим **ещё** фиксированный `1.0` урон за проход — это тот самый "+1 урон в секунду", явно поверх урона от самого эффекта Wither.
 
 ### `BlazebornWetPenaltyAbility.java`
@@ -107,6 +109,9 @@ public final class BlazebornWetPenaltyAbility implements TickAbility {
             return;
         }
         player.setFireTicks(0);
+        // reset invulnerability frames so this damage isn't swallowed by a recent
+        // Wither/other damage tick (i-frames absorb equal-or-smaller follow-up damage)
+        player.setNoDamageTicks(0);
         player.damage(WET_DAMAGE_PER_PASS);
     }
 }
@@ -114,6 +119,7 @@ public final class BlazebornWetPenaltyAbility implements TickAbility {
 
 - Иронично противоположное поведение по сравнению с обычным огненным существом: контакт с водой/дождём **вредит** Blazeborn, а не просто мешает эстетически.
 - `player.setFireTicks(0)` — принудительно тушит игрока (если он горел — например, от способности "подожжён на суше" ниже) в момент контакта с водой/дождём — это соответствует "тушение" из ТЗ и физически логично (вода тушит огонь).
+- `player.setNoDamageTicks(0)` — **фикс реального бага с плейтеста** ("у блейзборнов нет урона от воды, когда они под иссушением"): вне Nether у Blazeborn постоянно тикает Wither плюс наш собственный 1.0 урона в секунду — и без сброса кадров неуязвимости водный урон `2.0` почти всегда попадал в i-frames окно от одного из них и частично/полностью игнорировался движком. Механика i-frames подробно объяснена в [09-races-merman.md](09-races-merman.md).
 - `player.damage(WET_DAMAGE_PER_PASS)` — `2.0` урона (одно сердечко) за каждый проход, пока Blazeborn остаётся мокрым — это и есть "повышенный урон" из ТЗ, реализованный как фиксированный штраф за проход (не множитель к другому урону, а отдельный дополнительный урон).
 
 ### `BlazebornFireSaturationAbility.java`
@@ -275,10 +281,13 @@ public final class BlazebornPosthumousExplosionAbility implements Ability {
 
     public void onKill(Player blazeborn, EntityDeathEvent event) {
         LivingEntity victim = event.getEntity();
+        victim.getWorld().spawnParticle(Particle.EXPLOSION_EMITTER, victim.getLocation(), 1);
+        victim.getWorld().playSound(victim.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.0f);
         for (LivingEntity nearby : victim.getWorld().getNearbyLivingEntities(victim.getLocation(), RADIUS)) {
             if (nearby.equals(victim) || nearby.equals(blazeborn)) {
                 continue;
             }
+            nearby.setNoDamageTicks(0);
             nearby.damage(DAMAGE);
         }
     }
@@ -286,6 +295,8 @@ public final class BlazebornPosthumousExplosionAbility implements Ability {
 ```
 
 - `onKill(Player blazeborn, EntityDeathEvent event)` — принимает **и** самого Blazeborn (убийцу), **и** событие смерти — оба параметра нужны: событие даёт локацию/жертву, а `blazeborn` нужен отдельно, чтобы **исключить** его самого из последующего урона по площади.
+- `spawnParticle(Particle.EXPLOSION_EMITTER, ...)` + `playSound(..., Sound.ENTITY_GENERIC_EXPLODE, ...)` — **визуальный и звуковой** эффект взрыва, добавленный по итогам плейтеста: сам урон по площади работает, но если поблизости не оказывалось других живых существ, способность выглядела как "не срабатывает вообще" — теперь виден большой взрыв частиц и слышен звук в любом случае. Это именно эффект (частицы + звук), а не настоящий взрыв (`createExplosion`) — блоки не разрушаются, дополнительного игрового урона от "взрыва" нет, весь урон наносится следующим циклом вручную.
+- `nearby.setNoDamageTicks(0)` — сброс кадров неуязвимости и здесь: цель, которая только что получала урон (например, от того же боя), без сброса могла бы частично "проглотить" 24 урона (см. [09-races-merman.md](09-races-merman.md)).
 - `victim.getWorld().getNearbyLivingEntities(victim.getLocation(), RADIUS)` — все живые существа в радиусе 5 блоков от **места смерти жертвы** (не от позиции Blazeborn — это важное уточнение: если Blazeborn убил кого-то с дальней дистанции стрелой, взрыв происходит вокруг **погибшего**, а не вокруг стрелка).
 - `if (nearby.equals(victim) || nearby.equals(blazeborn)) continue;` — исключаем из урона **саму жертву** (она и так уже мертва — `EntityDeathEvent` наступает после того, как существо формально умерло, наносить ему урон бессмысленно и потенциально вызвало бы побочные эффекты) и **самого Blazeborn** (иначе получалось бы, что убийца сам себе наносит 24 урона за каждое убийство — очевидно, не то, что задумано в ТЗ, где взрыв должен задевать "всех **живых**", подразумевая под этим окружающих, а не самого исполнителя).
 - `nearby.damage(DAMAGE)` — 24 урона каждому оставшемуся существу поблизости, включая **других игроков** (в том числе других Blazeborn, если они случайно оказались рядом) — ТЗ явно требует "все живые в радиусе", без исключения для игроков команды/фракции, поэтому здесь нет никакой проверки "свой/чужой".

@@ -42,6 +42,7 @@ public final class MermanLandSuffocationAbility implements TickAbility {
         if (current > 0) {
             airLevel.put(id, Math.max(0, current - DRAIN_PER_PASS));
         } else {
+            player.setNoDamageTicks(0);
             player.damage(SUFFOCATION_DAMAGE);
         }
     }

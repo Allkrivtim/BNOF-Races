@@ -53,7 +53,7 @@ src/main/java/dev/oneframe/races/
 │   ├── DeepslateNoDropRule.java    правило 2: BlockBreakEvent, материал содержит "DEEPSLATE"
 │   ├── BarrierZoneDeathRule.java   правило 3: N секунд контакта с BARRIER -> смерть
 │   ├── ForbiddenEnchantRule.java   правило 4: Listener + PlayerTickRule одновременно
-│   ├── PortalLockdownRule.java     правило 5: PortalCreateEvent/PlayerPortalEvent/EnderEye
+│   ├── PortalLockdownRule.java     правило 5: End закрыт полностью; Nether-порталы разрешены (изменено после тестов)
 │   ├── TradeLockdownRule.java      правило 6: PlayerInteractEntityEvent + InventoryOpenEvent
 │   └── NameEnforcementRule.java    правило 7: displayName()/playerListName() = getName()
 ├── listeners/       по одному классу на "домен" Bukkit-событий, диспетчеризуют к способностям
@@ -189,7 +189,7 @@ players:
 | 2 | Deepslate без дропа/опыта | `DeepslateNoDropRule` | `Listener` | Marinian, Fugu (`LOW_Y_ORE_RULE`, через `MermanShared.EXEMPTIONS`) |
 | 3 | Смерть от N секунд контакта с BARRIER (не в creative/spectator) | `BarrierZoneDeathRule` | `PlayerTickRule` | нет (не поддерживается флагом) |
 | 4 | Запрещены Silk Touch/Fortune/Luck of the Sea/Protection | `ForbiddenEnchantRule` | `Listener` + `PlayerTickRule` | именные предметы (проверка `NamedItemService.isTagged`) |
-| 5 | Нет новых Nether/End порталов, нет End-телепорта | `PortalLockdownRule` | `Listener` | нет |
+| 5 | End закрыт (END_PLATFORM, End-телепорт, глаз Края); Nether-порталы разрешены (изменение исходного ТЗ после плейтеста) | `PortalLockdownRule` | `Listener` | нет |
 | 6 | Нет торговли с Villager/WanderingTrader | `TradeLockdownRule` | `Listener` | нет |
 | 7 | Форсированный ник = `getName()` каждые `enforce-names-every-ticks` тиков | `NameEnforcementRule` | `PlayerTickRule` | нет |
 
@@ -201,6 +201,9 @@ players:
 - **Paper API** `1.21.11-R0.1-SNAPSHOT`, `compileOnly` (не пакуется в jar — сервер предоставляет реализацию в рантайме).
 - **`-Xlint:deprecation` включён постоянно** в `compileJava` — при добавлении нового кода проверяйте вывод сборки на предупреждения о deprecated API (Paper активно переименовывает атрибуты/методы между минорными версиями — см. историю: `AnvilInventory#setRepairCost` → `AnvilView#setRepairCost`, `Entity#isInWaterOrRain()` → `isInWater() || isInRain()`, `Attribute.GENERIC_*` → `Attribute.*`).
 - **Amплификатор зелья = уровень - 1** (Speed II = амплификатор `1`) — частый источник ошибок при добавлении новых эффектов, перепроверяйте при код-ревью.
+- **Периодический урон — всегда `setNoDamageTicks(0)` перед `damage()`** — иначе урон "съедается" кадрами неуязвимости от предыдущего тика урона (Wither/Poison/другой источник); так сделано во всех тиковых способностях/правилах с уроном.
+- **`getInventory().getContents()` содержит `null` для пустых слотов** — оборачивать только в `Arrays.asList(...)`, НЕ в `List.of(...)` (бросает NPE на null-элементах; это был реальный продовый баг v1.0.0).
+- **Спавн сущности по образцу другой** — только `world.spawnEntity(loc, entity.getType())`; `spawn(loc, entity.getClass())` падает, т.к. `getClass()` возвращает CraftBukkit-класс реализации (CraftCow), а не Bukkit-интерфейс.
 - **`ambient=true, particles=false`** — стандартная пара флагов для всех пассивных эффектов (скрывает частицы постоянных эффектов).
 - **`NamespacedKey`** — единый неймспейс `"oneframe"` для всех PDC-ключей плагина (`items/NamedItemKeys.java`).
 - **Как регистрируются новые built-in расы:** добавить класс, реализующий `RaceProvider` (public no-args конструктор), в пакет `races/<category>/`, и **обязательно** дописать его полное имя строкой в `src/main/resources/META-INF/services/dev.oneframe.races.core.RaceProvider`. Пропуск этого шага — самая частая ошибка при добавлении расы: компиляция пройдёт успешно, но `ServiceLoader` расу не найдёт, и никакой ошибки в логе не будет (просто её не окажется в `/race list`).
@@ -221,14 +224,14 @@ players:
 ## Как собрать, запустить, отладить
 
 ```bash
-./gradlew clean build            # -> build/libs/OneFrameRaces-1.0.0.jar
+./gradlew clean build            # -> build/libs/OneFrameRaces-1.0.1.jar
 ```
 
 Локальный smoke-тест (пример, использовался при разработке):
 ```bash
 # скачать Paper 1.21.11 (см. https://fill.papermc.io/v3/projects/paper/versions/1.21.11)
 echo "eula=true" > eula.txt
-cp build/libs/OneFrameRaces-1.0.0.jar plugins/
+cp build/libs/OneFrameRaces-1.0.1.jar plugins/
 java -Xmx2G -jar paper-1.21.11-*.jar --nogui
 ```
 В консоли сервера проверить: `race list`, `race info forester`, `race set <online-player> forester`, `race reload`. Ожидаемая строка при старте: `[OneFrameRaces] OneFrameRaces enabled with 8 race(s).`

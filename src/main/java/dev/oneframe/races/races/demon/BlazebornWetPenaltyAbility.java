@@ -19,6 +19,9 @@ public final class BlazebornWetPenaltyAbility implements TickAbility {
             return;
         }
         player.setFireTicks(0);
+        // reset invulnerability frames so this damage isn't swallowed by a recent
+        // Wither/other damage tick (i-frames absorb equal-or-smaller follow-up damage)
+        player.setNoDamageTicks(0);
         player.damage(WET_DAMAGE_PER_PASS);
     }
 }

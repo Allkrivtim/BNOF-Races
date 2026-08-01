@@ -9,12 +9,18 @@ import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.world.PortalCreateEvent;
 
-/** Global rule 5: no new Nether/End portals, no End-portal activation via Ender Eye, no End teleport. */
+/**
+ * Global rule 5: the End is fully locked (no platform creation, no Ender Eye activation,
+ * no End-portal teleport). Nether portals are allowed - lighting a frame and the automatic
+ * exit-pair creation both work (relaxed from the original spec after playtesting).
+ */
 public final class PortalLockdownRule implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPortalCreate(PortalCreateEvent event) {
-        event.setCancelled(true);
+        if (event.getReason() == PortalCreateEvent.CreateReason.END_PLATFORM) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler(ignoreCancelled = true)

@@ -12,7 +12,7 @@ public final class MermanConditionalEffectsAbility implements TickAbility {
 
     @Override
     public String description() {
-        return "В воде/под дождём - Night Vision, Dolphin's Grace, Haste и полный кислород.";
+        return "В воде/под дождём - Night Vision, Dolphin's Grace, Haste II и полный кислород.";
     }
 
     @Override
@@ -23,6 +23,6 @@ public final class MermanConditionalEffectsAbility implements TickAbility {
         player.setRemainingAir(player.getMaximumAir());
         player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, DURATION_TICKS, 0, true, false));
         player.addPotionEffect(new PotionEffect(PotionEffectType.DOLPHINS_GRACE, DURATION_TICKS, 0, true, false));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, DURATION_TICKS, 0, true, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, DURATION_TICKS, 1, true, false));
     }
 }

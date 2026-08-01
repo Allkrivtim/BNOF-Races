@@ -249,7 +249,7 @@ public final class NamedItemService {
         if (eq == null) {
             return;
         }
-        for (ItemStack piece : List.of(eq.getHelmet(), eq.getChestplate(), eq.getLeggings(), eq.getBoots())) {
+        for (ItemStack piece : Arrays.asList(eq.getHelmet(), eq.getChestplate(), eq.getLeggings(), eq.getBoots())) {
             if (isTagged(piece) && ownerOf(piece).map(u -> !u.equals(player.getUniqueId())).orElse(true)) {
                 if (piece.equals(eq.getHelmet())) eq.setHelmet(null);
                 if (piece.equals(eq.getChestplate())) eq.setChestplate(null);
@@ -260,7 +260,7 @@ public final class NamedItemService {
     }
 ```
 
-- `List.of(eq.getHelmet(), eq.getChestplate(), eq.getLeggings(), eq.getBoots())` — собираем 4 слота брони в список для единообразного перебора. **Внимание:** `List.of(...)` не допускает `null`-элементов и бросит `NullPointerException`, если хотя бы один из этих геттеров вернёт `null` — но на практике `EntityEquipment`-геттеры возвращают либо реальный `ItemStack`, либо `ItemStack` типа `AIR` (не `null`), так что этот код безопасен в реальных условиях Bukkit API (хотя это и не совсем очевидно на первый взгляд — стоит иметь в виду при рефакторинге).
+- `Arrays.asList(eq.getHelmet(), ...)` — собираем 4 слота брони в список для единообразного перебора. Именно `Arrays.asList`, а не `List.of` — по той же причине, что и в `allSlots` ниже: геттеры экипировки на реальном сервере Paper **могут вернуть `null`** для пустого слота, а `List.of(...)` бросает `NullPointerException` на `null`-элементах. `isTagged(null)` безопасно возвращает `false`, так что `null`-элементы просто проходят мимо проверки.
 - Внутри цикла — не самый изящный, но рабочий способ определить, **какой именно** слот сейчас проверяется (`piece.equals(eq.getHelmet())` и т.д. — сравниваем текущий элемент цикла с содержимым каждого из четырёх геттеров) и, если это "чужой" помеченный предмет — обнулить соответствующий слот. Это чуть избыточно (четыре сравнения на каждую итерацию вместо прямого доступа по индексу), но безопасно, потому что слотов ровно 4, и цена лишних сравнений незначительна при вызове раз в секунду на одного игрока.
 
 ```java
@@ -286,7 +286,9 @@ public final class NamedItemService {
 
 ```java
     private java.util.stream.Stream<ItemStack> allSlots(Player player) {
-        List<ItemStack> stacks = new ArrayList<>(List.of(player.getInventory().getContents()));
+        // Arrays.asList, not List.of: inventory contents contain null for empty slots,
+        // and List.of throws NPE on null elements.
+        List<ItemStack> stacks = new ArrayList<>(Arrays.asList(player.getInventory().getContents()));
         EntityEquipment eq = player.getEquipment();
         if (eq != null) {
             stacks.add(eq.getHelmet());
@@ -300,7 +302,7 @@ public final class NamedItemService {
 ```
 
 - `player.getInventory().getContents()` — возвращает массив `ItemStack[]` всех слотов основного инвентаря (включая пустые — как `null`).
-- `List.of(...)` оборачивает массив в неизменяемый список, а `new ArrayList<>(...)` сразу копирует его в **изменяемый** список (потому что дальше мы хотим в него `add(...)` — четыре слота брони).
+- **`Arrays.asList(...)`, а не `List.of(...)`** — принципиально важный выбор: `List.of` **бросает `NullPointerException` на любом `null`-элементе**, а массив содержимого инвентаря почти всегда содержит `null` (пустые слоты). В версии 1.0.0 здесь стоял `List.of(...)` — это был реальный продовый баг, ронявший `/race set` для любой расы с именными предметами (marinian, fugu, warlock). `Arrays.asList` терпит `null`-элементы, а `new ArrayList<>(...)` копирует их в изменяемый список (дальше мы делаем `add(...)` четырёх слотов брони).
 - `stacks.stream().filter(java.util.Objects::nonNull)` — превращаем список в `Stream<ItemStack>` и сразу отфильтровываем `null`-элементы (пустые слоты) — метод-ссылка `Objects::nonNull` эквивалентна лямбде `x -> x != null`.
 - Используется в `grantMissing` для проверки "нет ли уже такого предмета где-нибудь у игрока" — единственное место, где нужен **весь** набор слотов сразу как поток, а не индексный доступ (в отличие от `periodicSweep`/`stripMatching`, которым нужен именно индекс, чтобы можно было записать `null` обратно в конкретный слот).
 

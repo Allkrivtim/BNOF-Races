@@ -39,6 +39,7 @@ public final class AltitudeHypoxiaRule implements PlayerTickRule {
         if (current > 0) {
             airLevel.put(id, Math.max(0, current - DRAIN_PER_PASS));
         } else {
+            player.setNoDamageTicks(0);
             player.damage(DAMAGE);
         }
     }

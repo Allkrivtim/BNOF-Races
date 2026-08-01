@@ -59,10 +59,10 @@ public final class FuguProvider implements RaceProvider {
     @Override
     public List<Ability> abilities() {
         List<Ability> abilities = new ArrayList<>(MermanShared.sharedAbilities());
-        abilities.add(new SimplePassiveEffectAbility("Постоянные Dolphin's Grace, Resistance и Slowness.",
+        abilities.add(new SimplePassiveEffectAbility("Постоянные Dolphin's Grace, Resistance III и Slowness IV.",
                 new PotionEffect(PotionEffectType.DOLPHINS_GRACE, PotionEffect.INFINITE_DURATION, 0, true, false),
-                new PotionEffect(PotionEffectType.RESISTANCE, PotionEffect.INFINITE_DURATION, 0, true, false),
-                new PotionEffect(PotionEffectType.SLOWNESS, PotionEffect.INFINITE_DURATION, 0, true, false)));
+                new PotionEffect(PotionEffectType.RESISTANCE, PotionEffect.INFINITE_DURATION, 2, true, false),
+                new PotionEffect(PotionEffectType.SLOWNESS, PotionEffect.INFINITE_DURATION, 3, true, false)));
         abilities.add(new FuguPoisonTouchAbility());
         return abilities;
     }

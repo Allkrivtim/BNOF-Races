@@ -8,6 +8,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -145,7 +146,7 @@ public final class NamedItemService {
         if (eq == null) {
             return;
         }
-        for (ItemStack piece : List.of(eq.getHelmet(), eq.getChestplate(), eq.getLeggings(), eq.getBoots())) {
+        for (ItemStack piece : Arrays.asList(eq.getHelmet(), eq.getChestplate(), eq.getLeggings(), eq.getBoots())) {
             if (isTagged(piece) && ownerOf(piece).map(u -> !u.equals(player.getUniqueId())).orElse(true)) {
                 if (piece.equals(eq.getHelmet())) eq.setHelmet(null);
                 if (piece.equals(eq.getChestplate())) eq.setChestplate(null);
@@ -172,7 +173,9 @@ public final class NamedItemService {
     }
 
     private java.util.stream.Stream<ItemStack> allSlots(Player player) {
-        List<ItemStack> stacks = new ArrayList<>(List.of(player.getInventory().getContents()));
+        // Arrays.asList, not List.of: inventory contents contain null for empty slots,
+        // and List.of throws NPE on null elements.
+        List<ItemStack> stacks = new ArrayList<>(Arrays.asList(player.getInventory().getContents()));
         EntityEquipment eq = player.getEquipment();
         if (eq != null) {
             stacks.add(eq.getHelmet());
