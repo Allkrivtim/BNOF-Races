@@ -45,9 +45,10 @@ public final class AngelTridentBoostAbility implements Ability {
         player.setVelocity(direction);
         player.setFallDistance(0.0f);
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_TRIDENT_RIPTIDE_3, 1.0f, 1.0f);
-        // No API to trigger the real client-side riptide spin animation on a dry dash, so a
-        // burst of wind particles behind the player stands in for it - visible to everyone
-        // nearby, not just the angel.
         player.getWorld().spawnParticle(Particle.GUST, player.getLocation(), 12, 0.3, 0.3, 0.3, 0.05);
+        // Real vanilla Riptide has its own dedicated spin animation that plain Bukkit API can't
+        // trigger on a dry dash. swingMainHand() at least plays a genuine, other-players-visible
+        // arm swing (the same call vanilla combat uses) as a stand-in.
+        player.swingMainHand();
     }
 }

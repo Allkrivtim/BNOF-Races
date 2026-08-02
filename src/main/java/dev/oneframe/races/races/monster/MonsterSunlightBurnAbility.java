@@ -2,6 +2,7 @@ package dev.oneframe.races.races.monster;
 
 import dev.oneframe.races.core.AbilityContext;
 import dev.oneframe.races.core.TickAbility;
+import dev.oneframe.races.util.WorldTimeUtil;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
@@ -24,7 +25,7 @@ public final class MonsterSunlightBurnAbility implements TickAbility {
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (player.getWorld().getEnvironment() != World.Environment.NORMAL
-                || !player.getWorld().isDayTime()
+                || WorldTimeUtil.isNight(player.getWorld())
                 || player.isInWater()
                 || player.getLocation().getBlock().getLightFromSky() < 15) {
             return;

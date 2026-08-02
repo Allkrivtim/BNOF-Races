@@ -81,7 +81,8 @@ src/main/java/dev/oneframe/races/
 └── util/
     ├── AttributeUtil.java          Attribute.MAX_HEALTH/ARMOR/ARMOR_TOUGHNESS setBaseValue
     ├── EnchantPools.java           FORBIDDEN (4 чара) + ALLOWED_POOL (32 чара для наград)
-    └── Msg.java                    Component-based sendMessage helpers + itemName() (non-italic)
+    ├── Msg.java                    Component-based sendMessage helpers + itemName() (non-italic)
+    └── WorldTimeUtil.java          isNight() по World#getTime() (НЕ isDayTime(), см. соглашения)
 
 src/main/resources/
 ├── plugin.yml                      main, api-version 1.21, команда race, оба permission
@@ -223,6 +224,9 @@ players:
 - **Периодический урон — всегда `setNoDamageTicks(0)` перед `damage()`** — иначе урон "съедается" кадрами неуязвимости от предыдущего тика урона (Wither/Poison/другой источник); так сделано во всех тиковых способностях/правилах с уроном.
 - **`getInventory().getContents()` содержит `null` для пустых слотов** — оборачивать только в `Arrays.asList(...)`, НЕ в `List.of(...)` (бросает NPE на null-элементах; это был реальный продовый баг v1.0.0).
 - **Спавн сущности по образцу другой** — только `world.spawnEntity(loc, entity.getType())`; `spawn(loc, entity.getClass())` падает, т.к. `getClass()` возвращает CraftBukkit-класс реализации (CraftCow), а не Bukkit-интерфейс.
+- **Проверка "сейчас ночь" — только через `WorldTimeUtil.isNight()` (`World#getTime()` в диапазоне `[12000, 24000)`), никогда не `World#isDayTime()`** — на реальном сервере (не на пустом тестовом flat-мире) `isDayTime()` не давал предсказуемого результата для ночных баффов Echo/Morkvald; ручная проверка по сырому времени — стандартная практика в экосистеме Bukkit-плагинов именно по этой причине.
+- **Настоящая видимая анимация взмаха — `LivingEntity#swingMainHand()`**, не `PlayerAnimationEvent` (это только *входящее* событие, вызвать вручную для показа другим игрокам нельзя) и не голые частицы — `swingMainHand()` рассылает тот же пакет анимации, что и обычная атака, и виден другим клиентам. Используется в `AngelTridentBoostAbility` для сухого рывка трезубца (плюс частицы `Particle.GUST` и звук — настоящую анимацию вращения ванильного Riptide это не воспроизводит, только компенсирует отсутствие взмаха).
+- **Высота застройки мира (build height/потолок Y) и текущая высота игрока (`player.getLocation().getY()`) — не связанные вещи.** Читать позицию игрока можно всегда и без датапака (так работает спешка Morkvald ниже Y=0, Slowness Archangel ниже Y=200); а вот **максимальную высоту, на которой вообще можно ставить блоки**, определяет тип измерения (dimension type) — это фиксируется при загрузке мира и меняется только датапаком (`HeightDatapackInstaller`), не рантайм-кодом плагина.
 - **`ambient=true, particles=false`** — стандартная пара флагов для всех пассивных эффектов (скрывает частицы постоянных эффектов).
 - **`NamespacedKey`** — единый неймспейс `"oneframe"` для всех PDC-ключей плагина (`items/NamedItemKeys.java`).
 - **Как регистрируются новые built-in расы:** добавить класс, реализующий `RaceProvider` (public no-args конструктор), в пакет `races/<category>/`, и **обязательно** дописать его полное имя строкой в `src/main/resources/META-INF/services/dev.oneframe.races.core.RaceProvider`. Пропуск этого шага — самая частая ошибка при добавлении расы: компиляция пройдёт успешно, но `ServiceLoader` расу не найдёт, и никакой ошибки в логе не будет (просто её не окажется в `/race list`).
@@ -246,14 +250,14 @@ players:
 ## Как собрать, запустить, отладить
 
 ```bash
-./gradlew clean build            # -> build/libs/OneFrameRaces-1.2.0.jar
+./gradlew clean build            # -> build/libs/OneFrameRaces-1.3.0.jar
 ```
 
 Локальный smoke-тест (пример, использовался при разработке):
 ```bash
 # скачать Paper 1.21.11 (см. https://fill.papermc.io/v3/projects/paper/versions/1.21.11)
 echo "eula=true" > eula.txt
-cp build/libs/OneFrameRaces-1.2.0.jar plugins/
+cp build/libs/OneFrameRaces-1.3.0.jar plugins/
 java -Xmx2G -jar paper-1.21.11-*.jar --nogui
 ```
 В консоли сервера проверить: `race list`, `race info forester`, `race set <online-player> forester`, `race reload`. Ожидаемая строка при старте: `[OneFrameRaces] OneFrameRaces enabled with 12 race(s).`

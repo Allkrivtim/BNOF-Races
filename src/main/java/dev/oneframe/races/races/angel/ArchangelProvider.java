@@ -4,10 +4,7 @@ import dev.oneframe.races.core.Ability;
 import dev.oneframe.races.core.ExemptionFlag;
 import dev.oneframe.races.core.RaceCategory;
 import dev.oneframe.races.core.RaceProvider;
-import dev.oneframe.races.core.SimplePassiveEffectAbility;
 import dev.oneframe.races.items.NamedItemDefinition;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 
 import java.util.List;
 import java.util.Set;
@@ -17,8 +14,7 @@ public final class ArchangelProvider implements RaceProvider {
     public static final String ID = "archangel";
 
     private final List<Ability> abilities = List.of(
-            new SimplePassiveEffectAbility("Постоянная Slowness I.",
-                    new PotionEffect(PotionEffectType.SLOWNESS, PotionEffect.INFINITE_DURATION, 0, true, false)),
+            new ArchangelLowAltitudeSlownessAbility(),
             new AngelNetherFireAbility(),
             new AngelTridentBoostAbility(),
             new ArchangelNoFlyWhileBurningAbility(),
