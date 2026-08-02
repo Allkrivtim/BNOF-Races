@@ -140,6 +140,10 @@ public final class RaceManager {
         // Reset non-potion managed state before reapplying: only Echo's onApply (below) sets
         // this back to true, so switching away from Echo leaves the player audible again.
         player.setSilent(false);
+        // Same idea: only Merman's onApply (below) removes the underwater penalty, so switching
+        // away from a Merman race leaves the player with the normal vanilla penalty back.
+        AttributeUtil.setSubmergedMobility(player,
+                AttributeUtil.VANILLA_SUBMERGED_MINING_SPEED, AttributeUtil.VANILLA_WATER_MOVEMENT_EFFICIENCY);
 
         for (PotionEffectType type : MANAGED_EFFECTS) {
             if (player.hasPotionEffect(type)) {
@@ -168,6 +172,8 @@ public final class RaceManager {
         AttributeUtil.setArmor(player, 0.0, 0.0);
         player.setHealth(Math.min(player.getHealth(), 20.0));
         player.setSilent(false);
+        AttributeUtil.setSubmergedMobility(player,
+                AttributeUtil.VANILLA_SUBMERGED_MINING_SPEED, AttributeUtil.VANILLA_WATER_MOVEMENT_EFFICIENCY);
         for (PotionEffectType type : MANAGED_EFFECTS) {
             if (player.hasPotionEffect(type)) {
                 player.removePotionEffect(type);

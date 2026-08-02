@@ -8,6 +8,7 @@ import dev.oneframe.races.core.RaceManager;
 import dev.oneframe.races.core.RaceRegistry;
 import dev.oneframe.races.items.NamedItemService;
 import dev.oneframe.races.items.NamedItemTransferGuardListener;
+import dev.oneframe.races.listeners.AirChangeListener;
 import dev.oneframe.races.listeners.AnimationListener;
 import dev.oneframe.races.listeners.AnvilListener;
 import dev.oneframe.races.listeners.ArmorChangeListener;
@@ -125,6 +126,7 @@ public final class OneFrameRacesPlugin extends JavaPlugin {
         pm.registerEvents(new ArmorChangeListener(raceManager), this);
         pm.registerEvents(new FoodListener(raceManager), this);
         pm.registerEvents(new VibrationListener(raceManager), this);
+        pm.registerEvents(new AirChangeListener(raceManager), this);
         pm.registerEvents(new InteractListener(raceManager, namedItemService), this);
         pm.registerEvents(new PlayerLifecycleListener(this, raceManager), this);
 

@@ -3,50 +3,77 @@ package dev.oneframe.races.races.merman;
 import dev.oneframe.races.core.AbilityContext;
 import dev.oneframe.races.core.TickAbility;
 import org.bukkit.entity.Player;
-
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import org.bukkit.event.entity.EntityAirChangeEvent;
 
 /**
- * Inverted drowning: Merman never drown in water (permanent Water Breathing passive handles
- * that), but slowly suffocate on dry land. Air is a custom per-second counter, not vanilla
- * air ticks (which only deplete underwater) - refilled instantly in water/rain, drained on land.
+ * Inverted drowning, hooked into the exact same per-tick decision vanilla itself makes about air
+ * ({@link EntityAirChangeEvent} fires whenever the engine is about to raise or lower the air
+ * supply - underwater it lowers it, on land it regenerates it back to max). Instead of running a
+ * separate correction loop that fights vanilla's own regen (which produces a visible sawtooth),
+ * this intercepts that single authoritative event and flips its direction: submerged/rain keeps
+ * getting pinned to max (never drains, no bubbles), dry land gets the decrement vanilla would
+ * otherwise apply while regenerating - down to -20 and a damage tick, exactly like vanilla
+ * drowning, just relocated to land. No potion effect and no extra scheduler are involved; the only
+ * periodic piece is a once-a-second nudge (via the shared TickService) to kick off the countdown
+ * the moment a player steps onto dry land with air already topped out, since vanilla has nothing
+ * left to change at that point and the event wouldn't otherwise fire on its own.
  */
 public final class MermanLandSuffocationAbility implements TickAbility {
 
-    /** Seconds of dry land before the air runs out (one tick-service pass == one second). */
-    private static final int SURFACE_SECONDS = 15;
-    private static final int MAX_AIR = SURFACE_SECONDS;
-    private static final int DRAIN_PER_PASS = 1;
     private static final double SUFFOCATION_DAMAGE = 2.0;
-
-    private final Map<UUID, Integer> airLevel = new ConcurrentHashMap<>();
 
     @Override
     public String description() {
-        return "Не тонет в воде, но задыхается на суше без дождя: " + SURFACE_SECONDS
-                + " секунд, затем периодический урон.";
+        return "Не тонет в воде и под дождём, но задыхается на суше - воздух реально тратится, "
+                + "затем периодический урон, как ванильное утопление.";
     }
 
     @Override
     public void onApply(Player player) {
-        airLevel.put(player.getUniqueId(), MAX_AIR);
+        player.setRemainingAir(player.getMaximumAir());
     }
 
+    /** Once-a-second backstop: starts the land countdown, and re-affirms full air if it drifted. */
     @Override
     public void tick(Player player, AbilityContext ctx) {
-        UUID id = player.getUniqueId();
-        if (player.isInWater() || player.isInRain()) {
-            airLevel.put(id, MAX_AIR);
+        boolean wet = player.isInWater() || player.isInRain();
+        if (wet) {
+            if (player.getRemainingAir() < player.getMaximumAir()) {
+                player.setRemainingAir(player.getMaximumAir());
+            }
             return;
         }
-        int current = airLevel.getOrDefault(id, MAX_AIR);
-        if (current > 0) {
-            airLevel.put(id, Math.max(0, current - DRAIN_PER_PASS));
-        } else {
+        if (player.getRemainingAir() >= player.getMaximumAir()) {
+            player.setRemainingAir(player.getMaximumAir() - 1);
+        }
+    }
+
+    /** Called by {@link dev.oneframe.races.listeners.AirChangeListener} on every vanilla air tick. */
+    public void onAirChange(Player player, EntityAirChangeEvent event) {
+        boolean wet = player.isInWater() || player.isInRain();
+        int current = player.getRemainingAir();
+        int proposed = event.getAmount();
+
+        if (wet) {
+            // Vanilla is about to drain them for being submerged - stay safe and full instead.
+            if (proposed < current) {
+                event.setAmount(player.getMaximumAir());
+            }
+            return;
+        }
+
+        // Dry: vanilla is trying to regenerate air (proposed > current) - invert that into the
+        // same drain-then-damage cycle vanilla runs underwater, just triggered by dry land here.
+        if (proposed <= current) {
+            return;
+        }
+        int next = current - 1;
+        if (next == -20) {
+            event.setAmount(0);
             player.setNoDamageTicks(0);
             player.damage(SUFFOCATION_DAMAGE);
+        } else {
+            event.setAmount(next);
         }
     }
 }

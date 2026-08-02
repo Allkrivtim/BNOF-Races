@@ -74,6 +74,7 @@ src/main/java/dev/oneframe/races/
 │   ├── FoodListener.java           FoodLevelChangeEvent (Seraphim без голода)
 │   ├── VibrationListener.java      GenericGameEvent (Echo - блокирует обнаружение Стражем/Sculk)
 │   ├── InteractListener.java       PlayerInteractEvent (рог Marinian, рывок трезубца ангелов)
+│   ├── AirChangeListener.java      EntityAirChangeEvent (Merman - инверсия дыхания, см. врезку ниже)
 │   └── PlayerLifecycleListener.java PlayerJoinEvent/PlayerRespawnEvent -> applyOnJoinOrRespawn (delayed 1 tick)
 ├── commands/
 │   ├── RaceCommand.java            CommandExecutor: list/info/get/set/clear/reload
@@ -177,6 +178,7 @@ players:
 | `PlayerArmorChangeEvent` (Paper) | `ArmorChangeListener` | NORMAL | не Cancellable (предмет снимается постфактум) |
 | `FoodLevelChangeEvent` | `FoodListener` | NORMAL | true |
 | `GenericGameEvent` | `VibrationListener` | NORMAL | true |
+| `EntityAirChangeEvent` | `AirChangeListener` | NORMAL | true |
 | `PlayerInteractEvent` | `InteractListener` | NORMAL | false (см. врезка ниже) |
 | `PlayerJoinEvent` | `PlayerLifecycleListener` | NORMAL | — |
 | `PlayerRespawnEvent` | `PlayerLifecycleListener` | **MONITOR** | — (нужно финальное состояние респавна) |
@@ -242,6 +244,7 @@ players:
 - **`RaceCommand#handleGet`** работает только для онлайн-игроков (`Bukkit.getPlayerExact`). Просмотр расы офлайн-игрока не реализован — потребовал бы дополнительного метода в `RaceManager`, читающего `races.yml` напрямую по нику/UUID через `OfflinePlayer`.
 - **`TickTaskHandle`** (возможность отмены отдельной задачи `TickService`) реализована, но **нигде не используется** — все задачи регистрируются "навсегда" (до `tickService.stop()` целиком). Пригодится, если понадобится включать/выключать отдельное глобальное правило на лету без рестарта.
 - **Защита именных предметов от передачи не абсолютна** — покрыты основные пути (клик/драг в чужой инвентарь/эндер-сундук, торговля, hopper, подбор чужого с земли) плюс периодическая зачистка раз в секунду; более экзотические пути передачи (через сторонние плагины с нестандартными инвентарями) не гарантированно перехватываются.
+- **Инверсия дыхания Merman (`MermanLandSuffocationAbility` + `AirChangeListener`)** — не тонут в воде/под дождём, задыхаются на суше. Реализовано через `EntityAirChangeEvent`, а не через отдельный тиковый таймер поверх ванильного: это событие срабатывает на каждое решение движка изменить запас воздуха (и когда он его тратит под водой, и когда восстанавливает на суше), поэтому достаточно перехватить и инвертировать именно его — под водой держим `event.setAmount(getMaximumAir())`, на суше вместо восстановления (+1) применяем декремент до -20 и урон, точно как ванильное утопление. Это устраняет "пилу", которая появляется при попытке поправлять `remainingAir` отдельным таймером раз в секунду (движок откатывает изменение регеном между проходами). Единственный тиковый код (`TickAbility#tick`, раз в секунду через `TickService`) — подстраховка: пинает счётчик на -1 в момент, когда игрок уже на суше, а воздух ещё на максимуме (движку в этот момент нечего менять, поэтому событие само не сработает и не с чего начать декремент).
 - **«Абсолютная тишина» Echo (`EchoSilentAbility` + `VibrationListener`)** — покрывает то, что доступно через plain Bukkit API: `setSilent(true)` (звуки сущности) + отмена `GenericGameEvent` (вибрации, то есть обнаружение Стражем/датчиками Sculk). Широковещательные звуки блоков (например, звук ломания камня, слышимый всем рядом) — не привязаны к сущности-источнику и не глушатся без перехвата пакетов (ProtocolLib); не реализовано.
 - **`SeraphimCleanseAuraAbility` переприменяет расовые пассивки** соседей сразу после очищения (через `ctx.raceManager()` + `PassiveEffectAbility`), но НЕ восстанавливает эффекты от чужих зелий/бафов других игроков — снимается всё, кроме собственной пассивки цели, каждый проход.
 - **Аура очищения Серафима (`SeraphimCleanseAuraAbility`) снимает у соседей ВСЕ эффекты, включая расовые пассивки других игроков.** Пассивки переприменяются только при входе/респавне/`/race set`, поэтому сосед-Blacksmith рядом с Серафимом теряет Strength II до перезахода. Это прямое следствие ТЗ («снимают любые эффекты окружающих игроков»); если понадобится щадящий вариант — фильтровать по списку расовых эффектов или переприменять пассивки в тиковой задаче.
