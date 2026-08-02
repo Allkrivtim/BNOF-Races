@@ -16,13 +16,14 @@ public final class BlazebornOutsideNetherAbility implements TickAbility {
         return "Вне Nether: слабый Wither + 1 урон в секунду.";
     }
 
+    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() { return java.util.Set.of(PotionEffectType.WITHER); }
+
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (player.getWorld().getEnvironment() == World.Environment.NETHER) {
             return;
         }
         player.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 60, 0, true, false));
-        player.setNoDamageTicks(0);
         player.damage(DAMAGE_PER_PASS);
     }
 }

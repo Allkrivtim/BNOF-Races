@@ -25,11 +25,15 @@ public final class PlayerLifecycleListener implements Listener {
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        Bukkit.getScheduler().runTask(plugin, () -> raceManager.applyOnJoinOrRespawn(event.getPlayer()));
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (event.getPlayer().isOnline()) raceManager.applyOnJoinOrRespawn(event.getPlayer());
+        });
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onRespawn(PlayerRespawnEvent event) {
-        Bukkit.getScheduler().runTask(plugin, () -> raceManager.applyOnJoinOrRespawn(event.getPlayer()));
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (event.getPlayer().isOnline()) raceManager.applyOnJoinOrRespawn(event.getPlayer());
+        });
     }
 }

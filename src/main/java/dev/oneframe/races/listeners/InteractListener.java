@@ -1,12 +1,13 @@
 package dev.oneframe.races.listeners;
 
 import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import dev.oneframe.races.core.RaceManager;
 import dev.oneframe.races.items.NamedItemService;
-import dev.oneframe.races.races.angel.AngelTridentBoostAbility;
-import dev.oneframe.races.races.merman.MarinianBattleCryAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Event;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -22,15 +23,16 @@ public final class InteractListener implements Listener {
         this.namedItemService = namedItemService;
     }
 
-    // Deliberately NOT ignoreCancelled: on servers with other plugins/scripts (WorldGuard,
-    // Skript, etc.) a right-click-in-air can end up cancelled for reasons unrelated to us
-    // (region protection, a custom script action, ...). These are personal, non-destructive
-    // effects (self velocity, a buff), not world edits, so they should still fire even if
-    // something else already denied the "real" interaction - this fixed a real bug where the
-    // trident dash only worked when aimed at a block (RIGHT_CLICK_BLOCK), never in open air.
-    @EventHandler
+    // RIGHT_CLICK_AIR is sometimes marked cancelled because vanilla has no block interaction to
+    // perform. It remains usable for named abilities. A cancelled block click, however, is
+    // respected so region/protection plugins keep authority over interactions in protected areas.
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK
+                && event.useInteractedBlock() == Event.Result.DENY) {
             return;
         }
         Player player = event.getPlayer();
@@ -41,13 +43,13 @@ public final class InteractListener implements Listener {
         String itemKey = namedItemService.itemKeyOf(item).orElse("");
 
         raceManager.getActiveRace(player).ifPresent(race -> {
+            if (!namedItemService.raceIdOf(item).map(race.id()::equals).orElse(false)) {
+                return;
+            }
             for (Ability ability : race.abilities()) {
-                if (ability instanceof MarinianBattleCryAbility a
-                        && MarinianBattleCryAbility.ITEM_KEY.equals(itemKey)) {
-                    a.tryActivate(player).ifPresent(remaining -> a.notifyOnCooldown(player, remaining));
-                } else if (ability instanceof AngelTridentBoostAbility a
-                        && AngelTridentBoostAbility.ITEM_KEY.equals(itemKey)) {
-                    a.boost(player);
+                if (ability instanceof EventAbilities.NamedItemInteract handler
+                        && handler.itemKey().equals(itemKey)) {
+                    handler.onNamedItemInteract(player, item);
                 }
             }
         });

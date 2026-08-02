@@ -5,6 +5,7 @@ import dev.oneframe.races.core.RaceManager;
 import dev.oneframe.races.core.RaceProvider;
 import dev.oneframe.races.core.RaceRegistry;
 import dev.oneframe.races.util.Msg;
+import dev.oneframe.races.config.PluginConfig;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -16,16 +17,19 @@ import java.util.Optional;
 
 public final class RaceCommand implements CommandExecutor {
 
-    private static final String ADMIN_PERMISSION = "oneframe.race.admin";
+    private static final String ADMIN_PERMISSION = "bnof.race.admin";
+    private static final String LEGACY_ADMIN_PERMISSION = "oneframe.race.admin";
 
     private final Plugin plugin;
     private final RaceRegistry registry;
     private final RaceManager raceManager;
+    private final PluginConfig config;
 
-    public RaceCommand(Plugin plugin, RaceRegistry registry, RaceManager raceManager) {
+    public RaceCommand(Plugin plugin, RaceRegistry registry, RaceManager raceManager, PluginConfig config) {
         this.plugin = plugin;
         this.registry = registry;
         this.raceManager = raceManager;
+        this.config = config;
     }
 
     @Override
@@ -109,7 +113,7 @@ public final class RaceCommand implements CommandExecutor {
     }
 
     private void handleSet(CommandSender sender, String[] args) {
-        if (!sender.hasPermission(ADMIN_PERMISSION)) {
+        if (!isAdmin(sender)) {
             Msg.error(sender, "Недостаточно прав.");
             return;
         }
@@ -128,17 +132,20 @@ public final class RaceCommand implements CommandExecutor {
             return;
         }
         RaceProvider race = raceOpt.get();
-        RaceManager.RaceSetResult result = raceManager.setRace(target, race);
-        switch (result) {
+        raceManager.setRace(target, race, result -> {
+            switch (result) {
             case OK -> Msg.ok(sender, target.getName() + " теперь " + race.displayName() + ".");
             case ALREADY_HAS -> Msg.error(sender, target.getName() + " уже имеет расу " + race.displayName() + ".");
             case CAP_REACHED -> Msg.error(sender, "Лимит игроков для расы " + race.displayName() + " исчерпан ("
                     + race.maxPlayers() + ").");
-        }
+            case SAVE_FAILED -> Msg.error(sender, "Не удалось сохранить races.yml; раса не изменена. Проверьте лог сервера.");
+            case BUSY -> Msg.error(sender, "Другая операция с расами ещё сохраняется; повторите команду.");
+            }
+        });
     }
 
     private void handleClear(CommandSender sender, String[] args) {
-        if (!sender.hasPermission(ADMIN_PERMISSION)) {
+        if (!isAdmin(sender)) {
             Msg.error(sender, "Недостаточно прав.");
             return;
         }
@@ -151,18 +158,34 @@ public final class RaceCommand implements CommandExecutor {
             Msg.error(sender, "Игрок не в сети: " + args[1]);
             return;
         }
-        raceManager.clearRace(target);
-        Msg.ok(sender, "Раса игрока " + target.getName() + " сброшена.");
+        raceManager.clearRace(target, result -> {
+            switch (result) {
+                case OK -> Msg.ok(sender, "Раса игрока " + target.getName() + " сброшена.");
+                case SAVE_FAILED -> Msg.error(sender, "Не удалось сохранить races.yml; раса не изменена. Проверьте лог сервера.");
+                case BUSY -> Msg.error(sender, "Другая операция с расами ещё сохраняется; повторите команду.");
+            }
+        });
     }
 
     private void handleReload(CommandSender sender) {
-        if (!sender.hasPermission(ADMIN_PERMISSION)) {
+        if (!isAdmin(sender)) {
             Msg.error(sender, "Недостаточно прав.");
             return;
         }
+        if (raceManager.isMutationPending()) {
+            Msg.error(sender, "Сначала дождитесь завершения сохранения текущей операции.");
+            return;
+        }
+        var previous = raceManager.captureActiveRaces(Bukkit.getOnlinePlayers());
+        plugin.reloadConfig();
+        config.reload(plugin.getConfig());
         registry.reload(plugin);
         raceManager.reloadFromDisk();
-        raceManager.revalidateOnline(Bukkit.getOnlinePlayers());
+        raceManager.reconcileAfterReload(Bukkit.getOnlinePlayers(), previous);
         Msg.ok(sender, "Реестр рас перезагружен (" + registry.all().size() + " рас).");
+    }
+
+    private boolean isAdmin(CommandSender sender) {
+        return sender.hasPermission(ADMIN_PERMISSION) || sender.hasPermission(LEGACY_ADMIN_PERMISSION);
     }
 }

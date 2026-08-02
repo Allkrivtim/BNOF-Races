@@ -1,8 +1,8 @@
 package dev.oneframe.races.listeners;
 
 import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import dev.oneframe.races.core.RaceManager;
-import dev.oneframe.races.races.human.BlacksmithFreeAnvilAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -23,8 +23,8 @@ public final class AnvilListener implements Listener {
         }
         raceManager.getActiveRace(player).ifPresent(race -> {
             for (Ability ability : race.abilities()) {
-                if (ability instanceof BlacksmithFreeAnvilAbility a) {
-                    a.onPrepareAnvil(event);
+                if (ability instanceof EventAbilities.Anvil handler) {
+                    handler.onPrepareAnvil(player, event);
                 }
             }
         });

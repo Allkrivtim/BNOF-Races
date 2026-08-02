@@ -1,10 +1,13 @@
 plugins {
     java
-    id("com.gradleup.shadow") version "8.3.5"
 }
 
 group = "dev.oneframe"
-version = "1.4.1"
+version = "2.0"
+
+base {
+    archivesName.set("BNOF-Races")
+}
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))
@@ -17,6 +20,10 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+
+    testImplementation(platform("org.junit:junit-bom:5.11.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
 }
 
 tasks {
@@ -30,10 +37,7 @@ tasks {
             expand("version" to project.version)
         }
     }
-    shadowJar {
-        archiveClassifier.set("")
-    }
-    build {
-        dependsOn(shadowJar)
+    test {
+        useJUnitPlatform()
     }
 }

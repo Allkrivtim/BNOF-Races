@@ -33,6 +33,7 @@ import dev.oneframe.races.rules.NameEnforcementRule;
 import dev.oneframe.races.rules.PortalLockdownRule;
 import dev.oneframe.races.rules.TradeLockdownRule;
 import dev.oneframe.races.storage.YamlRaceStorage;
+import dev.oneframe.races.storage.LegacyDataMigrator;
 import dev.oneframe.races.tick.TickService;
 import dev.oneframe.races.world.HeightDatapackInstaller;
 import org.bukkit.Bukkit;
@@ -40,8 +41,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.util.logging.Level;
 
-public final class OneFrameRacesPlugin extends JavaPlugin {
+public final class BnofRacesPlugin extends JavaPlugin {
 
     private RaceRegistry registry;
     private RaceManager raceManager;
@@ -50,6 +52,7 @@ public final class OneFrameRacesPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        LegacyDataMigrator.migrateIfNeeded(this);
         saveDefaultConfig();
         config = new PluginConfig(getConfig());
 
@@ -58,7 +61,7 @@ public final class OneFrameRacesPlugin extends JavaPlugin {
 
         YamlRaceStorage storage = new YamlRaceStorage(new File(getDataFolder(), "playerdata/races.yml"), getLogger());
         NamedItemService namedItemService = new NamedItemService();
-        raceManager = new RaceManager(registry, storage, namedItemService, getLogger());
+        raceManager = new RaceManager(registry, storage, namedItemService, this);
         raceManager.load();
 
         tickService = new TickService(this);
@@ -68,9 +71,9 @@ public final class OneFrameRacesPlugin extends JavaPlugin {
         registerListeners(namedItemService);
         registerCommand();
 
-        HeightDatapackInstaller.installIfMissing(getLogger());
+        HeightDatapackInstaller.install(this, config.heightDatapackEnabled());
 
-        getLogger().info("OneFrameRaces enabled with " + registry.all().size() + " race(s).");
+        getLogger().info("BNOF-Races enabled with " + registry.all().size() + " race(s).");
     }
 
     @Override
@@ -79,7 +82,7 @@ public final class OneFrameRacesPlugin extends JavaPlugin {
             tickService.stop();
         }
         if (raceManager != null) {
-            raceManager.saveNow();
+            raceManager.shutdownAndSave();
         }
     }
 
@@ -92,20 +95,23 @@ public final class OneFrameRacesPlugin extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(forbiddenEnchantRule, this);
 
         tickService.register(1, pass -> {
+            AbilityContext ctx = new AbilityContext(pass, config, raceManager);
             for (Player player : Bukkit.getOnlinePlayers()) {
-                AbilityContext ctx = new AbilityContext(pass, config, raceManager);
-                raceManager.tickAbilities(player, ctx);
-                hypoxiaRule.tick(player);
-                barrierRule.tick(player);
-                forbiddenEnchantRule.tick(player);
-                namedItemService.periodicSweep(player);
+                safely(player, "race abilities", () -> raceManager.tickAbilities(player, ctx));
+                safely(player, "altitude hypoxia", () -> hypoxiaRule.tick(player));
+                safely(player, "barrier rule", () -> barrierRule.tick(player));
+                safely(player, "forbidden enchants", () -> forbiddenEnchantRule.tick(player));
+                safely(player, "named items", () -> raceManager.getActiveRace(player)
+                        .ifPresentOrElse(race -> namedItemService.reconcile(player, race),
+                                () -> namedItemService.stripAllTagged(player)));
             }
         });
 
-        int namesIntervalPasses = Math.max(1, config.enforceNamesEveryTicks() / 20);
-        tickService.register(namesIntervalPasses, pass -> {
+        tickService.register(1, pass -> {
+            int namesIntervalPasses = Math.max(1, (config.enforceNamesEveryTicks() + 19) / 20);
+            if (pass % namesIntervalPasses != 0) return;
             for (Player player : Bukkit.getOnlinePlayers()) {
-                nameEnforcementRule.tick(player);
+                safely(player, "name enforcement", () -> nameEnforcementRule.tick(player));
             }
         });
     }
@@ -137,9 +143,17 @@ public final class OneFrameRacesPlugin extends JavaPlugin {
     }
 
     private void registerCommand() {
-        RaceCommand executor = new RaceCommand(this, registry, raceManager);
+        RaceCommand executor = new RaceCommand(this, registry, raceManager, config);
         var command = getCommand("race");
         command.setExecutor(executor);
         command.setTabCompleter(new RaceTabCompleter(registry));
+    }
+
+    private void safely(Player player, String operation, Runnable action) {
+        try {
+            action.run();
+        } catch (RuntimeException ex) {
+            getLogger().log(Level.WARNING, operation + " failed for " + player.getName(), ex);
+        }
     }
 }

@@ -2,7 +2,9 @@ package dev.oneframe.races.races.monster;
 
 import dev.oneframe.races.core.AbilityContext;
 import dev.oneframe.races.core.TickAbility;
+import dev.oneframe.races.core.EventAbilities;
 import org.bukkit.entity.Player;
+import org.bukkit.event.world.GenericGameEvent;
 
 /**
  * Absolute silence: {@code Entity#setSilent(true)} suppresses sounds sourced from the entity
@@ -15,7 +17,7 @@ import org.bukkit.entity.Player;
  * silencing those per-player without packet interception (ProtocolLib) is out of reach of the
  * plain Bukkit API and isn't attempted here.
  */
-public final class EchoSilentAbility implements TickAbility {
+public final class EchoSilentAbility implements TickAbility, EventAbilities.GameEvent {
 
     @Override
     public String description() {
@@ -32,5 +34,10 @@ public final class EchoSilentAbility implements TickAbility {
         if (!player.isSilent()) {
             player.setSilent(true);
         }
+    }
+
+    @Override
+    public void onGameEvent(Player player, GenericGameEvent event) {
+        event.setCancelled(true);
     }
 }

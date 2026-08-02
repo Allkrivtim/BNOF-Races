@@ -15,6 +15,8 @@ public final class EchoHasteBelowZeroAbility implements TickAbility {
         return "На высоте ниже Y=0 получает Haste I.";
     }
 
+    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() { return java.util.Set.of(PotionEffectType.HASTE); }
+
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (player.getLocation().getY() < 0) {

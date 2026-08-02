@@ -1,20 +1,26 @@
-name: OneFrameRaces
+name: BNOF-Races
 version: '${version}'
-main: dev.oneframe.races.OneFrameRacesPlugin
+main: dev.oneframe.races.BnofRacesPlugin
 api-version: '1.21'
 author: OneFrame
-description: Pluggable player-race system for the OneFrame server.
+description: Pluggable player-race system for the BNOF server.
 
 commands:
   race:
     description: Manage player races.
     usage: /race <list|info|get|set|clear|reload>
-    permission: oneframe.race.self
+    permission: bnof.race.self
 
 permissions:
-  oneframe.race.self:
+  bnof.race.self:
     default: true
     description: Allows viewing race info and your own race.
-  oneframe.race.admin:
+  bnof.race.admin:
     default: op
     description: Allows assigning/clearing races and reloading the registry.
+  oneframe.race.self:
+    default: true
+    description: Legacy alias retained for existing permission setups.
+  oneframe.race.admin:
+    default: op
+    description: Legacy alias retained for existing permission setups.

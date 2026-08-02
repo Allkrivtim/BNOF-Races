@@ -19,11 +19,11 @@ public final class MermanNoWaterPenaltyAbility implements TickAbility {
 
     @Override
     public void onApply(Player player) {
-        AttributeUtil.setSubmergedMobility(player, 1.0, 1.0);
+        AttributeUtil.applySubmergedMobility(player);
     }
 
     @Override
     public void tick(Player player, AbilityContext ctx) {
-        AttributeUtil.setSubmergedMobility(player, 1.0, 1.0);
+        AttributeUtil.applySubmergedMobility(player);
     }
 }

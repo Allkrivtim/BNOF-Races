@@ -3,3 +3,4 @@ settings:
   altitude-hypoxia-y: 1000
   barrier-death-seconds: 10
   low-y-ore-floor: 0   # reserved, unused
+  height-datapack-enabled: true

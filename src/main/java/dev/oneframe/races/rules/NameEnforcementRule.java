@@ -9,7 +9,8 @@ public final class NameEnforcementRule implements PlayerTickRule {
     @Override
     public void tick(Player player) {
         String realName = player.getName();
-        player.displayName(Component.text(realName));
-        player.playerListName(Component.text(realName));
+        Component expected = Component.text(realName);
+        if (!expected.equals(player.displayName())) player.displayName(expected);
+        if (!expected.equals(player.playerListName())) player.playerListName(expected);
     }
 }

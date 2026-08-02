@@ -1,8 +1,8 @@
 package dev.oneframe.races.listeners;
 
 import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import dev.oneframe.races.core.RaceManager;
-import dev.oneframe.races.races.merman.MermanLandSuffocationAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -23,8 +23,8 @@ public final class AirChangeListener implements Listener {
         }
         raceManager.getActiveRace(player).ifPresent(race -> {
             for (Ability ability : race.abilities()) {
-                if (ability instanceof MermanLandSuffocationAbility a) {
-                    a.onAirChange(player, event);
+                if (ability instanceof EventAbilities.AirChange handler) {
+                    handler.onAirChange(player, event);
                 }
             }
         });

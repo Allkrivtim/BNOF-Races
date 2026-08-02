@@ -20,7 +20,9 @@ public final class TradeLockdownRule implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onOpen(InventoryOpenEvent event) {
-        if (event.getInventory() instanceof MerchantInventory) {
+        if (event.getInventory() instanceof MerchantInventory merchantInventory
+                && (merchantInventory.getMerchant() instanceof Villager
+                || merchantInventory.getMerchant() instanceof WanderingTrader)) {
             event.setCancelled(true);
         }
     }

@@ -52,7 +52,7 @@ public final class ForbiddenEnchantRule implements Listener, PlayerTickRule {
             return;
         }
         ItemStack stack = event.getItem().getItemStack();
-        if (isForbiddenBook(stack)) {
+        if (!namedItemService.isTagged(stack) && (isForbiddenBook(stack) || hasForbiddenEnchant(stack))) {
             event.setCancelled(true);
         }
     }
@@ -74,8 +74,13 @@ public final class ForbiddenEnchantRule implements Listener, PlayerTickRule {
     public void tick(Player player) {
         for (int slot = 0; slot < player.getInventory().getSize(); slot++) {
             ItemStack stack = player.getInventory().getItem(slot);
-            if (isForbiddenBook(stack) && !namedItemService.isTagged(stack)) {
+            if (namedItemService.isTagged(stack)) {
+                continue;
+            }
+            if (isForbiddenBook(stack)) {
                 player.getInventory().setItem(slot, null);
+            } else {
+                stripForbiddenEnchants(stack);
             }
         }
     }
@@ -105,5 +110,10 @@ public final class ForbiddenEnchantRule implements Listener, PlayerTickRule {
         if (changed) {
             stack.setItemMeta(meta);
         }
+    }
+
+    private boolean hasForbiddenEnchant(ItemStack stack) {
+        if (stack == null || !stack.hasItemMeta()) return false;
+        return stack.getEnchantments().keySet().stream().anyMatch(EnchantPools::isForbidden);
     }
 }

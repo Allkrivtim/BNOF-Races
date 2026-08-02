@@ -15,6 +15,8 @@ public final class MermanConditionalEffectsAbility implements TickAbility {
         return "В воде/под дождём - Dolphin's Grace.";
     }
 
+    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() { return java.util.Set.of(PotionEffectType.DOLPHINS_GRACE); }
+
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (!(player.isInWater() || player.isInRain())) {

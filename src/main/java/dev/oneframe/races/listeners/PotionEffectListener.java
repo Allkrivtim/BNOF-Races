@@ -1,9 +1,8 @@
 package dev.oneframe.races.listeners;
 
 import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import dev.oneframe.races.core.RaceManager;
-import dev.oneframe.races.races.demon.WarlockWitherImmunityAbility;
-import dev.oneframe.races.races.human.ForesterPoisonImmunityAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -24,10 +23,8 @@ public final class PotionEffectListener implements Listener {
         }
         raceManager.getActiveRace(player).ifPresent(race -> {
             for (Ability ability : race.abilities()) {
-                if (ability instanceof ForesterPoisonImmunityAbility a) {
-                    a.onPotionEffect(event);
-                } else if (ability instanceof WarlockWitherImmunityAbility a) {
-                    a.onPotionEffect(event);
+                if (ability instanceof EventAbilities.PotionChange handler) {
+                    handler.onPotionChange(player, event);
                 }
             }
         });

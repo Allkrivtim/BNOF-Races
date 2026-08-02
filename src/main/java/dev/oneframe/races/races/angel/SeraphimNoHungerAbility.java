@@ -2,6 +2,7 @@ package dev.oneframe.races.races.angel;
 
 import dev.oneframe.races.core.AbilityContext;
 import dev.oneframe.races.core.TickAbility;
+import dev.oneframe.races.core.EventAbilities;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 
@@ -11,14 +12,14 @@ import org.bukkit.event.entity.FoodLevelChangeEvent;
  * would strip it (see {@link SeraphimCleanseAuraAbility}); raw food/saturation values are not
  * effects, so they survive.
  */
-public final class SeraphimNoHungerAbility implements TickAbility {
+public final class SeraphimNoHungerAbility implements TickAbility, EventAbilities.FoodChange {
 
     @Override
     public String description() {
         return "Не нуждается в еде: голод и насыщение не тратятся.";
     }
 
-    public void onFoodChange(FoodLevelChangeEvent event) {
+    public void onFoodChange(Player player, FoodLevelChangeEvent event) {
         if (event.getFoodLevel() < 20) {
             event.setCancelled(true);
         }

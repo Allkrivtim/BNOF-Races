@@ -23,7 +23,7 @@ import java.util.UUID;
  * moved into ANY open container (chest, ender chest, anvil, merchant, ...), can't travel via
  * hoppers, and can't be picked up off the ground by anyone but the owner. On death every tagged
  * item is stripped (from drops and, with keep_inventory, from the inventory) - fresh copies are
- * re-granted on respawn. The periodic {@link NamedItemService#periodicSweep} remains the safety
+ * re-granted on respawn. Periodic {@link NamedItemService#reconcile} remains the safety
  * net for anything that slips past.
  */
 public final class NamedItemTransferGuardListener implements Listener {
@@ -46,24 +46,24 @@ public final class NamedItemTransferGuardListener implements Listener {
 
         if (containerOpen) {
             // Placing a tagged item from the cursor into the open container.
-            if (clickedTop && namedItemService.isTagged(cursor)) {
+            if (clickedTop && namedItemService.isManagedItem(cursor)) {
                 event.setCancelled(true);
                 return;
             }
             // Shift-clicking a tagged item out of the player inventory into the container.
-            if (event.isShiftClick() && namedItemService.isTagged(current)) {
+            if (event.isShiftClick() && namedItemService.isManagedItem(current)) {
                 event.setCancelled(true);
                 return;
             }
             // Number-key swap moving a tagged hotbar item into the clicked container slot.
             if (clickedTop && event.getHotbarButton() >= 0
-                    && namedItemService.isTagged(event.getWhoClicked().getInventory().getItem(event.getHotbarButton()))) {
+                    && namedItemService.isManagedItem(event.getWhoClicked().getInventory().getItem(event.getHotbarButton()))) {
                 event.setCancelled(true);
                 return;
             }
             // Offhand-swap key pushing a tagged offhand item into the clicked container slot.
             if (clickedTop && event.getClick() == ClickType.SWAP_OFFHAND
-                    && namedItemService.isTagged(event.getWhoClicked().getInventory().getItemInOffHand())) {
+                    && namedItemService.isManagedItem(event.getWhoClicked().getInventory().getItemInOffHand())) {
                 event.setCancelled(true);
                 return;
             }
@@ -81,7 +81,7 @@ public final class NamedItemTransferGuardListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onDrag(InventoryDragEvent event) {
-        if (!namedItemService.isTagged(event.getOldCursor())) {
+        if (!namedItemService.isManagedItem(event.getOldCursor())) {
             return;
         }
         Inventory top = event.getView().getTopInventory();
@@ -98,7 +98,7 @@ public final class NamedItemTransferGuardListener implements Listener {
     }
 
     private boolean isForeignDestination(Inventory inventory, UUID actor, ItemStack stack) {
-        if (!namedItemService.isTagged(stack)) {
+        if (!namedItemService.isManagedItem(stack)) {
             return false;
         }
         UUID owner = namedItemService.ownerOf(stack).orElse(null);
@@ -117,7 +117,7 @@ public final class NamedItemTransferGuardListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent event) {
-        if (namedItemService.isTagged(event.getItemDrop().getItemStack())) {
+        if (namedItemService.isManagedItem(event.getItemDrop().getItemStack())) {
             event.setCancelled(true);
         }
     }
@@ -126,13 +126,13 @@ public final class NamedItemTransferGuardListener implements Listener {
     public void onDeath(PlayerDeathEvent event) {
         // Remove tagged items from the death drops, and (for keep_inventory=true) from the
         // inventory itself - respawn re-grants fresh copies via RaceManager#applyOnJoinOrRespawn.
-        event.getDrops().removeIf(namedItemService::isTagged);
+        event.getDrops().removeIf(namedItemService::isManagedItem);
         namedItemService.stripAllTagged(event.getEntity());
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onHopperMove(InventoryMoveItemEvent event) {
-        if (namedItemService.isTagged(event.getItem())) {
+        if (namedItemService.isManagedItem(event.getItem())) {
             event.setCancelled(true);
         }
     }
@@ -140,7 +140,7 @@ public final class NamedItemTransferGuardListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onPickup(EntityPickupItemEvent event) {
         ItemStack stack = event.getItem().getItemStack();
-        if (!namedItemService.isTagged(stack)) {
+        if (!namedItemService.isManagedItem(stack)) {
             return;
         }
         UUID owner = namedItemService.ownerOf(stack).orElse(null);

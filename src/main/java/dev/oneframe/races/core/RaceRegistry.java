@@ -10,7 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.ServiceLoader;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
+import java.util.ServiceConfigurationError;
 import java.util.logging.Logger;
 
 /**
@@ -20,7 +21,7 @@ import java.util.logging.Logger;
  */
 public final class RaceRegistry {
 
-    private final Map<String, RaceProvider> byId = new ConcurrentHashMap<>();
+    private final Map<String, RaceProvider> byId = new HashMap<>();
     private final List<URLClassLoader> addonLoaders = new java.util.ArrayList<>();
 
     public void reload(Plugin plugin) {
@@ -28,8 +29,7 @@ public final class RaceRegistry {
         byId.clear();
         Logger log = plugin.getLogger();
 
-        ServiceLoader.load(RaceProvider.class, getClass().getClassLoader())
-                .forEach(p -> register(p, log));
+        loadProviders(ServiceLoader.load(RaceProvider.class, getClass().getClassLoader()), "built-in", log);
 
         File addonsDir = new File(plugin.getDataFolder(), "races");
         File[] jars = addonsDir.isDirectory() ? addonsDir.listFiles((d, n) -> n.endsWith(".jar")) : null;
@@ -39,14 +39,31 @@ public final class RaceRegistry {
                     URLClassLoader loader = new URLClassLoader(
                             new URL[]{jar.toURI().toURL()}, plugin.getClass().getClassLoader());
                     addonLoaders.add(loader);
-                    ServiceLoader.load(RaceProvider.class, loader).forEach(p -> register(p, log));
-                } catch (Exception ex) {
+                    loadProviders(ServiceLoader.load(RaceProvider.class, loader), jar.getName(), log);
+                } catch (Exception | ServiceConfigurationError ex) {
                     log.warning("Failed to load race addon jar '" + jar.getName() + "': " + ex);
                 }
             }
         }
 
-        log.info("OneFrameRaces: registered " + byId.size() + " race(s).");
+        log.info("BNOF-Races: registered " + byId.size() + " race(s).");
+    }
+
+    private void loadProviders(ServiceLoader<RaceProvider> serviceLoader, String source, Logger log) {
+        var iterator = serviceLoader.iterator();
+        int failures = 0;
+        while (true) {
+            try {
+                if (!iterator.hasNext()) return;
+                register(iterator.next(), log);
+            } catch (ServiceConfigurationError | RuntimeException ex) {
+                log.warning("Skipping invalid race provider from '" + source + "': " + ex);
+                if (++failures >= 100) {
+                    log.severe("Aborting provider scan for '" + source + "' after 100 failures.");
+                    return;
+                }
+            }
+        }
     }
 
     private void closeAddonLoaders() {

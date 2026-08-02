@@ -23,6 +23,8 @@ public final class ArchangelLowAltitudeSlownessAbility implements TickAbility {
         return "Ниже Y=200 получает Slowness I.";
     }
 
+    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() { return java.util.Set.of(PotionEffectType.SLOWNESS); }
+
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (player.getLocation().getY() < THRESHOLD_Y) {

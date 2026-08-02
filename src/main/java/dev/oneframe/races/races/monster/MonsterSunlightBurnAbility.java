@@ -22,6 +22,8 @@ public final class MonsterSunlightBurnAbility implements TickAbility {
         return "Попав под прямой солнечный свет, загорается и получает иссушение.";
     }
 
+    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() { return java.util.Set.of(PotionEffectType.WITHER); }
+
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (player.getWorld().getEnvironment() != World.Environment.NORMAL

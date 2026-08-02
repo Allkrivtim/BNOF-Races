@@ -5,7 +5,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.ArrayList;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
@@ -18,7 +18,7 @@ import java.util.logging.Level;
 public final class TickService {
 
     private final Plugin plugin;
-    private final List<TickTask> tasks = new CopyOnWriteArrayList<>();
+    private final List<TickTask> tasks = new ArrayList<>();
     private long passCounter = 0;
     private BukkitTask heartbeat;
 
@@ -27,6 +27,9 @@ public final class TickService {
     }
 
     public void start() {
+        if (heartbeat != null) {
+            throw new IllegalStateException("TickService is already started");
+        }
         heartbeat = Bukkit.getScheduler().runTaskTimer(plugin, this::runPass, 20L, 20L);
     }
 

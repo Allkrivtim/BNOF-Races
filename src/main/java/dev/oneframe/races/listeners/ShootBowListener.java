@@ -1,8 +1,8 @@
 package dev.oneframe.races.listeners;
 
 import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import dev.oneframe.races.core.RaceManager;
-import dev.oneframe.races.races.demon.BlazebornFlamingArrowsAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -23,8 +23,8 @@ public final class ShootBowListener implements Listener {
         }
         raceManager.getActiveRace(shooter).ifPresent(race -> {
             for (Ability ability : race.abilities()) {
-                if (ability instanceof BlazebornFlamingArrowsAbility a) {
-                    a.onShoot(event);
+                if (ability instanceof EventAbilities.ShootBow handler) {
+                    handler.onShootBow(shooter, event);
                 }
             }
         });

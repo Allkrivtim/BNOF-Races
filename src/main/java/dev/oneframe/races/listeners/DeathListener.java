@@ -1,8 +1,8 @@
 package dev.oneframe.races.listeners;
 
 import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import dev.oneframe.races.core.RaceManager;
-import dev.oneframe.races.races.demon.BlazebornPosthumousExplosionAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -21,8 +21,8 @@ public final class DeathListener implements Listener {
         Player player = event.getEntity();
         raceManager.getActiveRace(player).ifPresent(race -> {
             for (Ability ability : race.abilities()) {
-                if (ability instanceof BlazebornPosthumousExplosionAbility a) {
-                    a.onDeath(player, event);
+                if (ability instanceof EventAbilities.Death handler) {
+                    handler.onDeath(player, event);
                 }
             }
         });

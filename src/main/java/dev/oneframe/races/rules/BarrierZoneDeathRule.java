@@ -7,13 +7,13 @@ import org.bukkit.entity.Player;
 
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
 
 /** Global rule 3: continuous contact with a barrier block for N seconds kills the player. */
 public final class BarrierZoneDeathRule implements PlayerTickRule {
 
     private final PluginConfig config;
-    private final Map<UUID, Integer> secondsTouching = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> secondsTouching = new HashMap<>();
 
     public BarrierZoneDeathRule(PluginConfig config) {
         this.config = config;
@@ -22,6 +22,10 @@ public final class BarrierZoneDeathRule implements PlayerTickRule {
     @Override
     public void tick(Player player) {
         UUID id = player.getUniqueId();
+        if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) {
+            secondsTouching.remove(id);
+            return;
+        }
         boolean touchingBarrier = player.getLocation().getBlock().getType() == Material.BARRIER
                 || player.getEyeLocation().getBlock().getType() == Material.BARRIER;
 
@@ -31,9 +35,7 @@ public final class BarrierZoneDeathRule implements PlayerTickRule {
         }
 
         int seconds = secondsTouching.merge(id, 1, Integer::sum);
-        if (seconds >= config.barrierDeathSeconds()
-                && player.getGameMode() != GameMode.CREATIVE
-                && player.getGameMode() != GameMode.SPECTATOR) {
+        if (seconds >= config.barrierDeathSeconds()) {
             player.setHealth(0.0);
             secondsTouching.remove(id);
         }

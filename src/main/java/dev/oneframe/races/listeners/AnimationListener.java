@@ -1,8 +1,8 @@
 package dev.oneframe.races.listeners;
 
 import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import dev.oneframe.races.core.RaceManager;
-import dev.oneframe.races.races.human.BlacksmithSwingWeaknessAbility;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerAnimationEvent;
@@ -23,8 +23,8 @@ public final class AnimationListener implements Listener {
         }
         raceManager.getActiveRace(event.getPlayer()).ifPresent(race -> {
             for (Ability ability : race.abilities()) {
-                if (ability instanceof BlacksmithSwingWeaknessAbility a) {
-                    a.onSwing(event.getPlayer());
+                if (ability instanceof EventAbilities.Swing handler) {
+                    handler.onSwing(event.getPlayer(), event);
                 }
             }
         });

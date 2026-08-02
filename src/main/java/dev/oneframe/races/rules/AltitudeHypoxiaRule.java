@@ -7,7 +7,7 @@ import org.bukkit.entity.Player;
 
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
 
 /** Global rule 1: above a configurable Y, oxygen depletes then periodic damage kicks in. */
 public final class AltitudeHypoxiaRule implements PlayerTickRule {
@@ -18,7 +18,7 @@ public final class AltitudeHypoxiaRule implements PlayerTickRule {
 
     private final PluginConfig config;
     private final RaceManager raceManager;
-    private final Map<UUID, Integer> airLevel = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> airLevel = new HashMap<>();
 
     public AltitudeHypoxiaRule(PluginConfig config, RaceManager raceManager) {
         this.config = config;
@@ -39,7 +39,6 @@ public final class AltitudeHypoxiaRule implements PlayerTickRule {
         if (current > 0) {
             airLevel.put(id, Math.max(0, current - DRAIN_PER_PASS));
         } else {
-            player.setNoDamageTicks(0);
             player.damage(DAMAGE);
         }
     }

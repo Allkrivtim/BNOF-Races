@@ -7,5 +7,5 @@ public interface RaceStorage {
 
     Map<UUID, String> loadAll();
 
-    void save(Map<UUID, String> assignments);
+    boolean save(Map<UUID, String> assignments);
 }

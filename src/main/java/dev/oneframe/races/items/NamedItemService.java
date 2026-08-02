@@ -1,6 +1,7 @@
 package dev.oneframe.races.items;
 
 import dev.oneframe.races.core.RaceProvider;
+import dev.oneframe.races.util.InventoryUtil;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.ItemStack;
@@ -13,6 +14,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 /**
@@ -23,12 +28,15 @@ import java.util.UUID;
  */
 public final class NamedItemService {
 
+    private static final int CURRENT_SCHEMA = 2;
+
     public ItemStack createTagged(NamedItemDefinition def, Player owner) {
         ItemStack stack = def.template().get();
         ItemMeta meta = stack.getItemMeta();
         meta.getPersistentDataContainer().set(NamedItemKeys.OWNER, PersistentDataType.STRING, owner.getUniqueId().toString());
         meta.getPersistentDataContainer().set(NamedItemKeys.RACE_ID, PersistentDataType.STRING, def.raceId());
         meta.getPersistentDataContainer().set(NamedItemKeys.ITEM_KEY, PersistentDataType.STRING, def.itemKey());
+        meta.getPersistentDataContainer().set(NamedItemKeys.SCHEMA, PersistentDataType.INTEGER, CURRENT_SCHEMA);
         stack.setItemMeta(meta);
         return stack;
     }
@@ -37,49 +45,81 @@ public final class NamedItemService {
         if (stack == null || !stack.hasItemMeta()) {
             return false;
         }
-        return stack.getItemMeta().getPersistentDataContainer().has(NamedItemKeys.ITEM_KEY, PersistentDataType.STRING);
+        return read(stack, NamedItemKeys.OWNER, NamedItemKeys.RACE_ID, NamedItemKeys.ITEM_KEY).isPresent()
+                || read(stack, NamedItemKeys.LEGACY_OWNER, NamedItemKeys.LEGACY_RACE_ID, NamedItemKeys.LEGACY_ITEM_KEY).isPresent();
+    }
+
+    /** True for complete items and malformed/legacy remnants that must not escape cleanup. */
+    public boolean isManagedItem(ItemStack stack) {
+        return hasAnyMarker(stack);
     }
 
     public Optional<UUID> ownerOf(ItemStack stack) {
         if (!isTagged(stack)) {
             return Optional.empty();
         }
-        String raw = stack.getItemMeta().getPersistentDataContainer().get(NamedItemKeys.OWNER, PersistentDataType.STRING);
-        if (raw == null) {
-            return Optional.empty();
-        }
-        try {
-            return Optional.of(UUID.fromString(raw));
-        } catch (IllegalArgumentException ex) {
-            return Optional.empty();
-        }
+        return identityOf(stack).map(Identity::owner);
     }
 
     public Optional<String> raceIdOf(ItemStack stack) {
         if (!isTagged(stack)) {
             return Optional.empty();
         }
-        return Optional.ofNullable(stack.getItemMeta().getPersistentDataContainer().get(NamedItemKeys.RACE_ID, PersistentDataType.STRING));
+        return identityOf(stack).map(Identity::raceId);
     }
 
     public Optional<String> itemKeyOf(ItemStack stack) {
         if (!isTagged(stack)) {
             return Optional.empty();
         }
-        return Optional.ofNullable(stack.getItemMeta().getPersistentDataContainer().get(NamedItemKeys.ITEM_KEY, PersistentDataType.STRING));
+        return identityOf(stack).map(Identity::itemKey);
+    }
+
+    public boolean isOwnedNamedItem(Player player, ItemStack stack, String itemKey) {
+        return identityOf(stack).map(identity ->
+                identity.owner().equals(player.getUniqueId()) && identity.itemKey().equals(itemKey)).orElse(false);
+    }
+
+    private Optional<Identity> identityOf(ItemStack stack) {
+        Optional<Identity> current = read(stack, NamedItemKeys.OWNER, NamedItemKeys.RACE_ID, NamedItemKeys.ITEM_KEY);
+        return current.isPresent() ? current
+                : read(stack, NamedItemKeys.LEGACY_OWNER, NamedItemKeys.LEGACY_RACE_ID, NamedItemKeys.LEGACY_ITEM_KEY);
+    }
+
+    private Optional<Identity> read(ItemStack stack, org.bukkit.NamespacedKey ownerKey,
+                                    org.bukkit.NamespacedKey raceKey, org.bukkit.NamespacedKey itemKey) {
+        if (stack == null || !stack.hasItemMeta()) {
+            return Optional.empty();
+        }
+        var pdc = stack.getItemMeta().getPersistentDataContainer();
+        String owner = pdc.get(ownerKey, PersistentDataType.STRING);
+        String race = pdc.get(raceKey, PersistentDataType.STRING);
+        String key = pdc.get(itemKey, PersistentDataType.STRING);
+        if (owner == null || race == null || race.isBlank() || key == null || key.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(new Identity(UUID.fromString(owner), race, key));
+        } catch (IllegalArgumentException ex) {
+            return Optional.empty();
+        }
+    }
+
+    private record Identity(UUID owner, String raceId, String itemKey) {
     }
 
     /** Grants any named item defined by {@code race} that the player doesn't already carry. */
     public void grantMissing(Player player, RaceProvider race) {
         for (NamedItemDefinition def : race.namedItems()) {
             boolean has = allSlots(player).anyMatch(stack ->
-                    isTagged(stack)
-                            && itemKeyOf(stack).map(k -> k.equals(def.itemKey())).orElse(false)
-                            && ownerOf(stack).map(u -> u.equals(player.getUniqueId())).orElse(false));
+                    identityOf(stack).map(identity -> identity.owner().equals(player.getUniqueId())
+                            && identity.raceId().equals(def.raceId())
+                            && identity.itemKey().equals(def.itemKey())
+                            && isCurrentSchema(stack)).orElse(false));
             if (!has) {
                 ItemStack tagged = createTagged(def, player);
                 if (!tryEquip(player, tagged)) {
-                    player.getInventory().addItem(tagged);
+                    InventoryUtil.giveOrDrop(player, tagged);
                 }
             }
         }
@@ -129,28 +169,49 @@ public final class NamedItemService {
 
     /** Strips every tagged named item regardless of race - used on death (fresh ones are re-granted on respawn). */
     public void stripAllTagged(Player player) {
-        stripMatching(player, stack -> true);
-    }
-
-    /** Dedupes to one copy per item-key and removes any tagged item not owned by this player. */
-    public void periodicSweep(Player player) {
-        Map<String, Boolean> seen = new HashMap<>();
         for (int slot = 0; slot < player.getInventory().getSize(); slot++) {
-            ItemStack stack = player.getInventory().getItem(slot);
-            if (!isTagged(stack)) {
-                continue;
-            }
-            boolean foreign = ownerOf(stack).map(u -> !u.equals(player.getUniqueId())).orElse(true);
-            if (foreign) {
-                player.getInventory().setItem(slot, null);
-                continue;
-            }
-            String key = itemKeyOf(stack).orElse("");
-            if (seen.putIfAbsent(key, true) != null) {
+            if (hasAnyMarker(player.getInventory().getItem(slot))) {
                 player.getInventory().setItem(slot, null);
             }
         }
-        stripForeignFromEquipment(player);
+    }
+
+    /** Reconciles ownership, race, item definitions, schema version and duplicates. */
+    public void reconcile(Player player, RaceProvider activeRace) {
+        Map<String, NamedItemDefinition> definitions = activeRace.namedItems().stream()
+                .collect(Collectors.toMap(NamedItemDefinition::itemKey, Function.identity()));
+        Set<String> seen = new HashSet<>();
+        for (int slot = 0; slot < player.getInventory().getSize(); slot++) {
+            ItemStack stack = player.getInventory().getItem(slot);
+            if (!hasAnyMarker(stack)) {
+                continue;
+            }
+            Optional<Identity> identity = identityOf(stack);
+            boolean valid = identity.map(value -> value.owner().equals(player.getUniqueId())
+                    && value.raceId().equals(activeRace.id())
+                    && definitions.containsKey(value.itemKey())
+                    && isCurrentSchema(stack)
+                    && seen.add(value.itemKey())).orElse(false);
+            if (!valid) {
+                player.getInventory().setItem(slot, null);
+            }
+        }
+        grantMissing(player, activeRace);
+    }
+
+    private boolean isCurrentSchema(ItemStack stack) {
+        Integer schema = stack.getItemMeta().getPersistentDataContainer()
+                .get(NamedItemKeys.SCHEMA, PersistentDataType.INTEGER);
+        return schema != null && schema == CURRENT_SCHEMA;
+    }
+
+    private boolean hasAnyMarker(ItemStack stack) {
+        if (stack == null || !stack.hasItemMeta()) return false;
+        var pdc = stack.getItemMeta().getPersistentDataContainer();
+        return pdc.has(NamedItemKeys.OWNER) || pdc.has(NamedItemKeys.RACE_ID)
+                || pdc.has(NamedItemKeys.ITEM_KEY) || pdc.has(NamedItemKeys.SCHEMA)
+                || pdc.has(NamedItemKeys.LEGACY_OWNER) || pdc.has(NamedItemKeys.LEGACY_RACE_ID)
+                || pdc.has(NamedItemKeys.LEGACY_ITEM_KEY);
     }
 
     private void stripForeignFromEquipment(Player player) {

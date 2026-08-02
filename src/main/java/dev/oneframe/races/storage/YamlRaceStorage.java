@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -53,22 +54,28 @@ public final class YamlRaceStorage implements RaceStorage {
     }
 
     @Override
-    public synchronized void save(Map<UUID, String> assignments) {
+    public synchronized boolean save(Map<UUID, String> assignments) {
         YamlConfiguration yaml = new YamlConfiguration();
         ConfigurationSection section = yaml.createSection("players");
         assignments.forEach((uuid, raceId) -> section.set(uuid.toString(), raceId));
 
         try {
             File parent = file.getParentFile();
-            if (parent != null && !parent.exists()) {
-                parent.mkdirs();
+            if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+                throw new IOException("Could not create " + parent);
             }
             File tmp = new File(parent, file.getName() + ".tmp");
             yaml.save(tmp);
-            Files.move(tmp.toPath(), file.toPath(),
-                    StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            try {
+                Files.move(tmp.toPath(), file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException ex) {
+                Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
         } catch (IOException ex) {
             logger.log(Level.SEVERE, "Failed to save race assignments", ex);
+            return false;
         }
     }
 }

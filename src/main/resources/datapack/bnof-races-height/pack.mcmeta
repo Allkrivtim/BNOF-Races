@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "description": "BNOF-Races: overworld build height raised to Y=512",
+    "min_format": [94, 1],
+    "max_format": [94, 1]
+  }
+}

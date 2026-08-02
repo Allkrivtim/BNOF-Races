@@ -13,6 +13,8 @@ public final class BlazebornFireSaturationAbility implements TickAbility {
         return "Подожжён на суше - получает Saturation (бонус).";
     }
 
+    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() { return java.util.Set.of(PotionEffectType.SATURATION); }
+
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (player.getFireTicks() > 0 && !player.isInWater()) {

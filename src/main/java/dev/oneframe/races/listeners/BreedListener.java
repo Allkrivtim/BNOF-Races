@@ -1,8 +1,8 @@
 package dev.oneframe.races.listeners;
 
 import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import dev.oneframe.races.core.RaceManager;
-import dev.oneframe.races.races.human.ForesterBreedAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -23,8 +23,8 @@ public final class BreedListener implements Listener {
         }
         raceManager.getActiveRace(breeder).ifPresent(race -> {
             for (Ability ability : race.abilities()) {
-                if (ability instanceof ForesterBreedAbility a) {
-                    a.onBreed(event);
+                if (ability instanceof EventAbilities.Breed handler) {
+                    handler.onBreed(breeder, event);
                 }
             }
         });

@@ -1,6 +1,6 @@
 package dev.oneframe.races.races.demon;
 
-import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -8,7 +8,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
-public final class WarlockVampiricStrikeAbility implements Ability {
+public final class WarlockVampiricStrikeAbility implements EventAbilities.Attack {
 
     /**
      * Known quirk kept intentionally: the heal is doubled (net 6 HP), per spec instructions
@@ -21,7 +21,7 @@ public final class WarlockVampiricStrikeAbility implements Ability {
         return "Вампирический удар: Wither на 14 секунд жертве + лечит себя (известное поведение: 6 HP).";
     }
 
-    public void onHit(Player warlock, EntityDamageByEntityEvent event) {
+    public void onAttack(Player warlock, EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof LivingEntity victim)) {
             return;
         }

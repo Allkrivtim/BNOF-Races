@@ -4,15 +4,23 @@ import dev.oneframe.races.items.NamedItemService;
 import dev.oneframe.races.storage.RaceStorage;
 import dev.oneframe.races.util.AttributeUtil;
 import org.bukkit.entity.Player;
+import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
 import java.util.logging.Logger;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import org.bukkit.plugin.Plugin;
 
 /**
  * Owns player&lt;-&gt;race assignments (in-memory + persisted), enforces per-race
@@ -25,27 +33,26 @@ import java.util.logging.Logger;
  */
 public final class RaceManager {
 
-    /** Every potion effect type any race passive/ability ever grants; cleared before reapplying. */
-    private static final Set<PotionEffectType> MANAGED_EFFECTS = Set.of(
-            PotionEffectType.LUCK, PotionEffectType.STRENGTH, PotionEffectType.DOLPHINS_GRACE,
-            PotionEffectType.RESISTANCE, PotionEffectType.SLOWNESS, PotionEffectType.FIRE_RESISTANCE,
-            PotionEffectType.WITHER, PotionEffectType.POISON, PotionEffectType.WATER_BREATHING,
-            PotionEffectType.NIGHT_VISION, PotionEffectType.HASTE, PotionEffectType.SPEED,
-            PotionEffectType.WEAKNESS, PotionEffectType.SATURATION, PotionEffectType.REGENERATION,
-            PotionEffectType.GLOWING, PotionEffectType.BLINDNESS, PotionEffectType.INVISIBILITY
-    );
+    private static final NamespacedKey SILENT_MARKER = new NamespacedKey("bnof-races", "owns_silent");
 
-    private final Map<UUID, String> assignments = new ConcurrentHashMap<>();
+    private final Map<UUID, String> assignments = new HashMap<>();
     private final RaceRegistry registry;
     private final RaceStorage storage;
     private final NamedItemService namedItemService;
     private final Logger logger;
+    private final Plugin plugin;
+    private final ExecutorService storageExecutor = Executors.newSingleThreadExecutor(
+            Thread.ofPlatform().daemon().name("BNOF-Races-storage").factory());
+    private boolean mutationPending;
+    private CompletableFuture<Boolean> pendingSave;
+    private Map<UUID, String> pendingCandidate;
 
-    public RaceManager(RaceRegistry registry, RaceStorage storage, NamedItemService namedItemService, Logger logger) {
+    public RaceManager(RaceRegistry registry, RaceStorage storage, NamedItemService namedItemService, Plugin plugin) {
         this.registry = registry;
         this.storage = storage;
         this.namedItemService = namedItemService;
-        this.logger = logger;
+        this.plugin = plugin;
+        this.logger = plugin.getLogger();
     }
 
     public void load() {
@@ -57,8 +64,12 @@ public final class RaceManager {
         load();
     }
 
-    public void saveNow() {
-        storage.save(assignments);
+    public Map<UUID, RaceProvider> captureActiveRaces(Iterable<? extends Player> players) {
+        Map<UUID, RaceProvider> snapshot = new HashMap<>();
+        for (Player player : players) {
+            getActiveRace(player).ifPresent(race -> snapshot.put(player.getUniqueId(), race));
+        }
+        return snapshot;
     }
 
     public Optional<RaceProvider> getActiveRace(Player player) {
@@ -74,45 +85,119 @@ public final class RaceManager {
         return (int) assignments.values().stream().filter(raceId::equals).count();
     }
 
-    public RaceSetResult setRace(Player target, RaceProvider race) {
+    public void setRace(Player target, RaceProvider race, Consumer<RaceSetResult> completion) {
+        if (mutationPending) {
+            completion.accept(RaceSetResult.BUSY);
+            return;
+        }
         String current = assignments.get(target.getUniqueId());
         if (race.id().equals(current)) {
-            return RaceSetResult.ALREADY_HAS;
+            completion.accept(RaceSetResult.ALREADY_HAS);
+            return;
         }
         int occ = occupancy(race.id());
         if (occ >= race.maxPlayers()) {
-            return RaceSetResult.CAP_REACHED;
+            completion.accept(RaceSetResult.CAP_REACHED);
+            return;
         }
 
-        if (current != null) {
-            namedItemService.stripAllForRace(target, current);
-        }
-        assignments.put(target.getUniqueId(), race.id());
-        storage.save(assignments);
-        applyRace(target, race);
-        return RaceSetResult.OK;
+        RaceProvider previous = current == null ? null : registry.get(current).orElse(null);
+        Map<UUID, String> candidate = new HashMap<>(assignments);
+        candidate.put(target.getUniqueId(), race.id());
+        saveMutation(candidate, saved -> {
+            if (!saved) {
+                completion.accept(RaceSetResult.SAVE_FAILED);
+                return;
+            }
+            assignments.clear();
+            assignments.putAll(candidate);
+            if (target.isOnline()) {
+                if (current != null) namedItemService.stripAllForRace(target, current);
+                applyRace(target, race, previous);
+            }
+            completion.accept(RaceSetResult.OK);
+        });
     }
 
-    public void clearRace(Player target) {
-        String current = assignments.remove(target.getUniqueId());
-        if (current != null) {
-            namedItemService.stripAllForRace(target, current);
+    public void clearRace(Player target, Consumer<ClearRaceResult> completion) {
+        if (mutationPending) {
+            completion.accept(ClearRaceResult.BUSY);
+            return;
+        }
+        String current = assignments.get(target.getUniqueId());
+        Map<UUID, String> candidate = new HashMap<>(assignments);
+        candidate.remove(target.getUniqueId());
+        RaceProvider previous = current == null ? null : registry.get(current).orElse(null);
+        saveMutation(candidate, saved -> {
+            if (!saved) {
+                completion.accept(ClearRaceResult.SAVE_FAILED);
+                return;
+            }
+            assignments.clear();
+            assignments.putAll(candidate);
+            if (target.isOnline()) {
+                if (current != null) namedItemService.stripAllForRace(target, current);
+                clearRaceState(target, previous);
+            }
+            completion.accept(ClearRaceResult.OK);
+        });
+    }
+
+    private void saveMutation(Map<UUID, String> candidate, Consumer<Boolean> completion) {
+        mutationPending = true;
+        pendingCandidate = candidate;
+        pendingSave = CompletableFuture.supplyAsync(() -> storage.save(candidate), storageExecutor);
+        pendingSave.whenComplete((saved, error) -> {
+            if (!plugin.isEnabled()) return;
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                mutationPending = false;
+                pendingCandidate = null;
+                pendingSave = null;
+                if (error != null) {
+                    logger.warning("Asynchronous race save failed: " + error);
+                    completion.accept(false);
+                } else {
+                    completion.accept(Boolean.TRUE.equals(saved));
+                }
+            });
+        });
+    }
+
+    public boolean isMutationPending() {
+        return mutationPending;
+    }
+
+    /** Finishes an in-flight durable write and closes the storage worker during plugin disable. */
+    public void shutdownAndSave() {
+        if (pendingSave != null) {
+            try {
+                if (Boolean.TRUE.equals(pendingSave.get(10, TimeUnit.SECONDS)) && pendingCandidate != null) {
+                    assignments.clear();
+                    assignments.putAll(pendingCandidate);
+                }
+            } catch (Exception ex) {
+                logger.warning("Could not finish pending race save during shutdown: " + ex);
+            }
         }
         storage.save(assignments);
-        resetToVanilla(target);
+        storageExecutor.shutdown();
     }
 
     public void applyOnJoinOrRespawn(Player player) {
         String id = assignments.get(player.getUniqueId());
         if (id == null) {
+            clearRaceState(player, null);
+            namedItemService.stripAllTagged(player);
             return;
         }
         Optional<RaceProvider> race = registry.get(id);
         if (race.isEmpty()) {
             logger.warning("Player " + player.getName() + " has unregistered race id '" + id + "'; skipping bonuses.");
+            clearRaceState(player, null);
+            namedItemService.stripAllTagged(player);
             return;
         }
-        applyRace(player, race.get());
+        applyRace(player, race.get(), race.get());
     }
 
     /** Re-validates every online player's race against a freshly reloaded registry. */
@@ -122,34 +207,41 @@ public final class RaceManager {
         }
     }
 
+    public void reconcileAfterReload(Iterable<? extends Player> onlinePlayers,
+                                     Map<UUID, RaceProvider> previousRaces) {
+        for (Player player : onlinePlayers) {
+            RaceProvider previous = previousRaces.get(player.getUniqueId());
+            String id = assignments.get(player.getUniqueId());
+            RaceProvider current = id == null ? null : registry.get(id).orElse(null);
+            if (current == null) {
+                clearRaceState(player, previous);
+                namedItemService.stripAllTagged(player);
+            } else {
+                applyRace(player, current, previous);
+            }
+        }
+    }
+
     /** Invokes every {@link TickAbility} of the player's active race - called once per pass. */
     public void tickAbilities(Player player, AbilityContext ctx) {
         getActiveRace(player).ifPresent(race -> {
             for (Ability ability : race.abilities()) {
                 if (ability instanceof TickAbility tickAbility) {
-                    tickAbility.tick(player, ctx);
+                    try {
+                        tickAbility.tick(player, ctx);
+                    } catch (RuntimeException ex) {
+                        logger.warning("Ability '" + ability.getClass().getName() + "' failed for "
+                                + player.getName() + ": " + ex);
+                    }
                 }
             }
         });
     }
 
-    private void applyRace(Player player, RaceProvider race) {
-        AttributeUtil.setMaxHealth(player, race.hp());
+    private void applyRace(Player player, RaceProvider race, RaceProvider previous) {
+        clearRaceState(player, previous);
+        AttributeUtil.applyRaceAttributes(player, race.hp(), race.sp(), race.sp() / 2.0);
         player.setHealth(Math.min(player.getHealth() <= 0 ? race.hp() : player.getHealth(), race.hp()));
-        AttributeUtil.setArmor(player, race.sp(), race.sp() / 2.0);
-        // Reset non-potion managed state before reapplying: only Echo's onApply (below) sets
-        // this back to true, so switching away from Echo leaves the player audible again.
-        player.setSilent(false);
-        // Same idea: only Merman's onApply (below) removes the underwater penalty, so switching
-        // away from a Merman race leaves the player with the normal vanilla penalty back.
-        AttributeUtil.setSubmergedMobility(player,
-                AttributeUtil.VANILLA_SUBMERGED_MINING_SPEED, AttributeUtil.VANILLA_WATER_MOVEMENT_EFFICIENCY);
-
-        for (PotionEffectType type : MANAGED_EFFECTS) {
-            if (player.hasPotionEffect(type)) {
-                player.removePotionEffect(type);
-            }
-        }
         for (Ability ability : race.abilities()) {
             if (ability instanceof PassiveEffectAbility passive) {
                 for (PotionEffect effect : passive.passiveEffects()) {
@@ -160,21 +252,32 @@ public final class RaceManager {
 
         namedItemService.grantMissing(player, race);
 
+        boolean wasSilent = player.isSilent();
         for (Ability ability : race.abilities()) {
             if (ability instanceof TickAbility tickAbility) {
                 tickAbility.onApply(player);
             }
         }
+        if (!wasSilent && player.isSilent()) {
+            player.getPersistentDataContainer().set(SILENT_MARKER, PersistentDataType.BYTE, (byte) 1);
+        }
     }
 
-    private void resetToVanilla(Player player) {
-        AttributeUtil.setMaxHealth(player, 20.0);
-        AttributeUtil.setArmor(player, 0.0, 0.0);
-        player.setHealth(Math.min(player.getHealth(), 20.0));
-        player.setSilent(false);
-        AttributeUtil.setSubmergedMobility(player,
-                AttributeUtil.VANILLA_SUBMERGED_MINING_SPEED, AttributeUtil.VANILLA_WATER_MOVEMENT_EFFICIENCY);
-        for (PotionEffectType type : MANAGED_EFFECTS) {
+    private void clearRaceState(Player player, RaceProvider previous) {
+        AttributeUtil.clearRaceAttributes(player);
+        AttributeUtil.clearSubmergedMobility(player);
+        double maxHealth = player.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH) == null
+                ? 20.0 : player.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH).getValue();
+        player.setHealth(Math.min(player.getHealth(), maxHealth));
+        if (player.getPersistentDataContainer().has(SILENT_MARKER, PersistentDataType.BYTE)) {
+            player.setSilent(false);
+            player.getPersistentDataContainer().remove(SILENT_MARKER);
+        }
+        if (previous == null) {
+            return;
+        }
+        for (PotionEffectType type : previous.abilities().stream()
+                .flatMap(ability -> ability.ownedPotionEffects().stream()).distinct().toList()) {
             if (player.hasPotionEffect(type)) {
                 player.removePotionEffect(type);
             }
@@ -182,6 +285,10 @@ public final class RaceManager {
     }
 
     public enum RaceSetResult {
-        OK, ALREADY_HAS, CAP_REACHED
+        OK, ALREADY_HAS, CAP_REACHED, SAVE_FAILED, BUSY
+    }
+
+    public enum ClearRaceResult {
+        OK, SAVE_FAILED, BUSY
     }
 }

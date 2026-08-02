@@ -17,6 +17,10 @@ public final class MorkvaldNightBuffsAbility implements TickAbility {
         return "Ночью в Верхнем мире получает Strength II и Regeneration II.";
     }
 
+    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() {
+        return java.util.Set.of(PotionEffectType.STRENGTH, PotionEffectType.REGENERATION);
+    }
+
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (player.getWorld().getEnvironment() != World.Environment.NORMAL || !WorldTimeUtil.isNight(player.getWorld())) {

@@ -18,6 +18,10 @@ public final class EchoNightBuffsAbility implements TickAbility {
         return "Ночью в Верхнем мире получает Invisibility II и стремительность (Speed I).";
     }
 
+    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() {
+        return java.util.Set.of(PotionEffectType.INVISIBILITY, PotionEffectType.SPEED);
+    }
+
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (player.getWorld().getEnvironment() != World.Environment.NORMAL || !WorldTimeUtil.isNight(player.getWorld())) {

@@ -1,8 +1,6 @@
 package dev.oneframe.races.races.angel;
 
-import dev.oneframe.races.core.Ability;
 import dev.oneframe.races.core.AbilityContext;
-import dev.oneframe.races.core.PassiveEffectAbility;
 import dev.oneframe.races.core.TickAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
@@ -12,11 +10,8 @@ import org.bukkit.potion.PotionEffect;
  * 5 blocks. Never from the seraphim themselves - so two seraphim standing together cleanse each
  * other, exactly as specified.
  *
- * <p>Stripping is indiscriminate (it removes racial passive effects too, e.g. a nearby
- * Blacksmith's Strength II), so right after cleansing, each nearby player's own active race's
- * {@link PassiveEffectAbility} effects are reapplied - the aura clears everything ELSE (buffs
- * from potions, other players, etc.) but doesn't leave their own race permanently "undone"
- * until their next join/respawn/{@code /race set}.
+ * <p>Stripping is intentionally indiscriminate, including racial passives. Passive effects are
+ * only restored by the normal race lifecycle (assignment, join or respawn).
  */
 public final class SeraphimCleanseAuraAbility implements TickAbility {
 
@@ -36,19 +31,6 @@ public final class SeraphimCleanseAuraAbility implements TickAbility {
             for (PotionEffect effect : nearby.getActivePotionEffects()) {
                 nearby.removePotionEffect(effect.getType());
             }
-            reapplyOwnRacialPassives(nearby, ctx);
         }
-    }
-
-    private void reapplyOwnRacialPassives(Player nearby, AbilityContext ctx) {
-        ctx.raceManager().getActiveRace(nearby).ifPresent(race -> {
-            for (Ability ability : race.abilities()) {
-                if (ability instanceof PassiveEffectAbility passive) {
-                    for (PotionEffect effect : passive.passiveEffects()) {
-                        nearby.addPotionEffect(effect);
-                    }
-                }
-            }
-        });
     }
 }

@@ -16,6 +16,8 @@ public final class MonsterNetherBlindnessAbility implements TickAbility {
         return "В Аду слепнет.";
     }
 
+    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() { return java.util.Set.of(PotionEffectType.BLINDNESS); }
+
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (player.getWorld().getEnvironment() == World.Environment.NETHER) {

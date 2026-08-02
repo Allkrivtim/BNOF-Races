@@ -1,6 +1,8 @@
 package dev.oneframe.races.rules;
 
 import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
@@ -38,6 +40,14 @@ public final class PortalLockdownRule implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onTeleport(PlayerTeleportEvent event) {
+        if (event.getTo() != null && event.getTo().getWorld() != null
+                && event.getTo().getWorld().getEnvironment() == World.Environment.THE_END) {
+            event.setCancelled(true);
+        }
+    }
+
     @EventHandler(ignoreCancelled = true)
     public void onInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null
@@ -51,12 +61,6 @@ public final class PortalLockdownRule implements Listener {
         if (inHand == Material.ENDER_EYE && clicked == Material.END_PORTAL_FRAME) {
             event.setCancelled(true);
             return;
-        }
-        // Flint and steel / fire charge on obsidian - blocks lighting a nether portal at the
-        // source, before PortalCreateEvent would even fire.
-        if ((inHand == Material.FLINT_AND_STEEL || inHand == Material.FIRE_CHARGE)
-                && clicked == Material.OBSIDIAN) {
-            event.setCancelled(true);
         }
     }
 }

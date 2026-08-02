@@ -1,6 +1,7 @@
 package dev.oneframe.races.races.merman;
 
 import dev.oneframe.races.core.AbilityContext;
+import dev.oneframe.races.core.EventAbilities;
 import dev.oneframe.races.core.TickAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityAirChangeEvent;
@@ -18,7 +19,7 @@ import org.bukkit.event.entity.EntityAirChangeEvent;
  * the moment a player steps onto dry land with air already topped out, since vanilla has nothing
  * left to change at that point and the event wouldn't otherwise fire on its own.
  */
-public final class MermanLandSuffocationAbility implements TickAbility {
+public final class MermanLandSuffocationAbility implements TickAbility, EventAbilities.AirChange {
 
     private static final double SUFFOCATION_DAMAGE = 2.0;
 
@@ -67,13 +68,8 @@ public final class MermanLandSuffocationAbility implements TickAbility {
         if (proposed <= current) {
             return;
         }
-        int next = current - 1;
-        if (next == -20) {
-            event.setAmount(0);
-            player.setNoDamageTicks(0);
-            player.damage(SUFFOCATION_DAMAGE);
-        } else {
-            event.setAmount(next);
-        }
+        boolean damage = MermanAirCycle.causesDamage(current);
+        event.setAmount(MermanAirCycle.nextDryAir(current));
+        if (damage) player.damage(SUFFOCATION_DAMAGE);
     }
 }

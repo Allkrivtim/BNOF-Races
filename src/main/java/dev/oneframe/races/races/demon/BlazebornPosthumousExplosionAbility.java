@@ -1,6 +1,6 @@
 package dev.oneframe.races.races.demon;
 
-import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -17,7 +17,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
  * sound + a log line): the dying player only sees the death screen, so with nobody else
  * nearby the ability used to look like it never fired.
  */
-public final class BlazebornPosthumousExplosionAbility implements Ability {
+public final class BlazebornPosthumousExplosionAbility implements EventAbilities.Death {
 
     private static final double RADIUS = 5.0;
     private static final double DAMAGE = 24.0;
@@ -42,11 +42,10 @@ public final class BlazebornPosthumousExplosionAbility implements Ability {
             if (nearby.equals(blazeborn)) {
                 continue;
             }
-            nearby.setNoDamageTicks(0);
             nearby.damage(DAMAGE);
             hit++;
         }
-        Bukkit.getLogger().info("[OneFrameRaces] Blazeborn posthumous explosion at "
+        Bukkit.getLogger().info("[BNOF-Races] Blazeborn posthumous explosion at "
                 + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ()
                 + " (" + blazeborn.getName() + "), entities hit: " + hit);
     }

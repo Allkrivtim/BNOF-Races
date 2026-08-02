@@ -1,12 +1,13 @@
 package dev.oneframe.races.races.human;
 
-import dev.oneframe.races.core.Ability;
+import dev.oneframe.races.core.EventAbilities;
 import org.bukkit.entity.Ageable;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.event.entity.EntityBreedEvent;
+import org.bukkit.entity.Player;
 
-public final class ForesterBreedAbility implements Ability {
+public final class ForesterBreedAbility implements EventAbilities.Breed {
 
     @Override
     public String description() {
@@ -14,7 +15,7 @@ public final class ForesterBreedAbility implements Ability {
     }
 
     /** Called from the central breed listener (after the event resolves) - spawns a second baby. */
-    public void onBreed(EntityBreedEvent event) {
+    public void onBreed(Player player, EntityBreedEvent event) {
         LivingEntity original = event.getEntity();
         // spawnEntity by EntityType, not spawn(loc, original.getClass()): getClass() returns the
         // CraftBukkit implementation class (e.g. CraftCow), which CraftRegionAccessor rejects.
