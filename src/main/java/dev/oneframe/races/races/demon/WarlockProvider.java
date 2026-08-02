@@ -19,7 +19,6 @@ public final class WarlockProvider implements RaceProvider {
 
     private final List<Ability> abilities = List.of(
             new WarlockWitherImmunityAbility(),
-            new WarlockOutsideNetherPoisonAbility(),
             new WarlockVampiricStrikeAbility()
     );
 
