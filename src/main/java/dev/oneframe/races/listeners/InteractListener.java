@@ -12,15 +12,19 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.Bukkit;
 
 public final class InteractListener implements Listener {
 
     private final RaceManager raceManager;
     private final NamedItemService namedItemService;
+    private final Plugin plugin;
 
-    public InteractListener(RaceManager raceManager, NamedItemService namedItemService) {
+    public InteractListener(RaceManager raceManager, NamedItemService namedItemService, Plugin plugin) {
         this.raceManager = raceManager;
         this.namedItemService = namedItemService;
+        this.plugin = plugin;
     }
 
     // RIGHT_CLICK_AIR is sometimes marked cancelled because vanilla has no block interaction to
@@ -49,7 +53,13 @@ public final class InteractListener implements Listener {
             for (Ability ability : race.abilities()) {
                 if (ability instanceof EventAbilities.NamedItemInteract handler
                         && handler.itemKey().equals(itemKey)) {
-                    handler.onNamedItemInteract(player, item);
+                    if (handler.deferInteraction()) {
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            if (player.isOnline()) handler.onNamedItemInteract(player, item);
+                        });
+                    } else {
+                        handler.onNamedItemInteract(player, item);
+                    }
                 }
             }
         });

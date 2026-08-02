@@ -276,6 +276,14 @@ public final class RaceManager {
         if (previous == null) {
             return;
         }
+        for (Ability ability : previous.abilities()) {
+            try {
+                ability.onRemove(player);
+            } catch (RuntimeException ex) {
+                logger.warning("Ability cleanup '" + ability.getClass().getName() + "' failed for "
+                        + player.getName() + ": " + ex);
+            }
+        }
         for (PotionEffectType type : previous.abilities().stream()
                 .flatMap(ability -> ability.ownedPotionEffects().stream()).distinct().toList()) {
             if (player.hasPotionEffect(type)) {

@@ -2,14 +2,15 @@ package dev.oneframe.races;
 
 import dev.oneframe.races.commands.RaceCommand;
 import dev.oneframe.races.commands.RaceTabCompleter;
+import dev.oneframe.races.breathing.BreathingService;
 import dev.oneframe.races.config.PluginConfig;
 import dev.oneframe.races.core.AbilityContext;
 import dev.oneframe.races.core.RaceManager;
 import dev.oneframe.races.core.RaceRegistry;
 import dev.oneframe.races.items.NamedItemService;
 import dev.oneframe.races.items.NamedItemTransferGuardListener;
-import dev.oneframe.races.listeners.AirChangeListener;
 import dev.oneframe.races.listeners.AnimationListener;
+import dev.oneframe.races.listeners.AirChangeListener;
 import dev.oneframe.races.listeners.AnvilListener;
 import dev.oneframe.races.listeners.ArmorChangeListener;
 import dev.oneframe.races.listeners.BreedListener;
@@ -25,7 +26,7 @@ import dev.oneframe.races.listeners.PotionEffectListener;
 import dev.oneframe.races.listeners.ProjectileHitListener;
 import dev.oneframe.races.listeners.ShootBowListener;
 import dev.oneframe.races.listeners.VibrationListener;
-import dev.oneframe.races.rules.AltitudeHypoxiaRule;
+import dev.oneframe.races.listeners.StopUsingItemListener;
 import dev.oneframe.races.rules.BarrierZoneDeathRule;
 import dev.oneframe.races.rules.DeepslateNoDropRule;
 import dev.oneframe.races.rules.ForbiddenEnchantRule;
@@ -49,6 +50,7 @@ public final class BnofRacesPlugin extends JavaPlugin {
     private RaceManager raceManager;
     private TickService tickService;
     private PluginConfig config;
+    private BreathingService breathingService;
 
     @Override
     public void onEnable() {
@@ -63,6 +65,7 @@ public final class BnofRacesPlugin extends JavaPlugin {
         NamedItemService namedItemService = new NamedItemService();
         raceManager = new RaceManager(registry, storage, namedItemService, this);
         raceManager.load();
+        breathingService = new BreathingService(config, raceManager);
 
         tickService = new TickService(this);
         registerTickTasks(namedItemService);
@@ -81,13 +84,15 @@ public final class BnofRacesPlugin extends JavaPlugin {
         if (tickService != null) {
             tickService.stop();
         }
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (breathingService != null) breathingService.reset(player);
+        }
         if (raceManager != null) {
             raceManager.shutdownAndSave();
         }
     }
 
     private void registerTickTasks(NamedItemService namedItemService) {
-        AltitudeHypoxiaRule hypoxiaRule = new AltitudeHypoxiaRule(config, raceManager);
         BarrierZoneDeathRule barrierRule = new BarrierZoneDeathRule(config);
         ForbiddenEnchantRule forbiddenEnchantRule = new ForbiddenEnchantRule(namedItemService);
         NameEnforcementRule nameEnforcementRule = new NameEnforcementRule();
@@ -95,10 +100,15 @@ public final class BnofRacesPlugin extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(forbiddenEnchantRule, this);
 
         tickService.register(1, pass -> {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                safely(player, "breathing", () -> breathingService.tick(player));
+            }
+        });
+
+        tickService.register(20, pass -> {
             AbilityContext ctx = new AbilityContext(pass, config, raceManager);
             for (Player player : Bukkit.getOnlinePlayers()) {
                 safely(player, "race abilities", () -> raceManager.tickAbilities(player, ctx));
-                safely(player, "altitude hypoxia", () -> hypoxiaRule.tick(player));
                 safely(player, "barrier rule", () -> barrierRule.tick(player));
                 safely(player, "forbidden enchants", () -> forbiddenEnchantRule.tick(player));
                 safely(player, "named items", () -> raceManager.getActiveRace(player)
@@ -108,8 +118,7 @@ public final class BnofRacesPlugin extends JavaPlugin {
         });
 
         tickService.register(1, pass -> {
-            int namesIntervalPasses = Math.max(1, (config.enforceNamesEveryTicks() + 19) / 20);
-            if (pass % namesIntervalPasses != 0) return;
+            if (pass % config.enforceNamesEveryTicks() != 0) return;
             for (Player player : Bukkit.getOnlinePlayers()) {
                 safely(player, "name enforcement", () -> nameEnforcementRule.tick(player));
             }
@@ -132,8 +141,10 @@ public final class BnofRacesPlugin extends JavaPlugin {
         pm.registerEvents(new ArmorChangeListener(raceManager), this);
         pm.registerEvents(new FoodListener(raceManager), this);
         pm.registerEvents(new VibrationListener(raceManager), this);
+        pm.registerEvents(breathingService, this);
         pm.registerEvents(new AirChangeListener(raceManager), this);
-        pm.registerEvents(new InteractListener(raceManager, namedItemService), this);
+        pm.registerEvents(new InteractListener(raceManager, namedItemService, this), this);
+        pm.registerEvents(new StopUsingItemListener(raceManager, namedItemService), this);
         pm.registerEvents(new PlayerLifecycleListener(this, raceManager), this);
 
         pm.registerEvents(new DeepslateNoDropRule(raceManager), this);

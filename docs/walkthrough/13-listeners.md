@@ -7,3 +7,5 @@ Damage/attack и named-item interact обрабатываются на `HIGHEST`
 Armor listener передаёт полный `PlayerArmorChangeEvent`. Поэтому Seraphim сразу возвращает запрещённую броню, а секундный tick дополнительно очищает уже надетую при назначении/reload. Разрешены только собственные PDC-валидные крылья, не любая Elytra.
 
 Join/respawn применение отложено на один tick и проверяет, что игрок всё ещё online. Death/transfer listeners согласуют lifecycle расовых предметов.
+
+`BreathingService` на `LOWEST` отменяет ванильный `EntityAirChangeEvent` только во время высотной гипоксии. Поэтому последующий `AirChangeListener` не запускает расовую инверсию Merman на опасной высоте; ниже порога дыхание подводников снова обрабатывает их способность, а дыхание остальных игроков остаётся ванильным.

@@ -1,6 +1,7 @@
 package dev.oneframe.races.core;
 
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.entity.Player;
 
 import java.util.Set;
 
@@ -19,5 +20,9 @@ public interface Ability {
      */
     default Set<PotionEffectType> ownedPotionEffects() {
         return Set.of();
+    }
+
+    /** Releases non-potion state owned by the ability when its race is removed or reloaded. */
+    default void onRemove(Player player) {
     }
 }

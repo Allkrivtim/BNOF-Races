@@ -10,7 +10,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 
 /**
- * The single shared 1-second heartbeat behind every periodic check in the plugin (hypoxia,
+ * The single shared server-tick heartbeat behind every periodic check in the plugin (breathing,
  * barrier zones, named-item cleanup, forbidden-enchant sweeps, ability ticks, name enforcement).
  * Callers register a {@link TickTask} instead of starting their own
  * {@code Bukkit.getScheduler().runTaskTimer}; everything shares this one heartbeat.
@@ -30,7 +30,7 @@ public final class TickService {
         if (heartbeat != null) {
             throw new IllegalStateException("TickService is already started");
         }
-        heartbeat = Bukkit.getScheduler().runTaskTimer(plugin, this::runPass, 20L, 20L);
+        heartbeat = Bukkit.getScheduler().runTaskTimer(plugin, this::runPass, 1L, 1L);
     }
 
     public void stop() {
@@ -40,8 +40,8 @@ public final class TickService {
         }
     }
 
-    public TickTaskHandle register(int intervalPasses, Consumer<Long> action) {
-        TickTask task = new TickTask(Math.max(1, intervalPasses), action);
+    public TickTaskHandle register(int intervalTicks, Consumer<Long> action) {
+        TickTask task = new TickTask(Math.max(1, intervalTicks), action);
         tasks.add(task);
         return new TickTaskHandle(() -> tasks.remove(task));
     }

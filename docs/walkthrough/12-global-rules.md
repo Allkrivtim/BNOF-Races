@@ -1,6 +1,6 @@
 # 12. Глобальные правила
 
-- `AltitudeHypoxiaRule`: выше config-Y тратит внутренний воздух и наносит обычный урон.
+- Высотная гипоксия реализована `BreathingService`: выше config-Y все неосвобождённые расы расходуют настоящий ванильный `remainingAir` от максимума до drowning-порога, видят шкалу пузырьков и затем получают обычный урон. На этой высоте сервис имеет приоритет над расовым дыханием Merman; `ALTITUDE_HYPOXIA` освобождает расу от правила.
 - `BarrierZoneDeathRule`: считает только survival/adventure; creative/spectator сразу очищают счётчик.
 - `DeepslateNoDropRule`: управляет drops deepslate-блоков.
 - `ForbiddenEnchantRule`: фильтрует offers/loot/pickup и каждую секунду удаляет запрещённые stored enchants либо снимает обычные enchants. Валидные расовые предметы исключены.

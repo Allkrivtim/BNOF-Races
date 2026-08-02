@@ -18,6 +18,7 @@ import org.bukkit.event.world.GenericGameEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import com.destroystokyo.paper.event.player.PlayerArmorChangeEvent;
 import org.bukkit.inventory.ItemStack;
+import io.papermc.paper.event.player.PlayerStopUsingItemEvent;
 
 /**
  * Event-domain capability interfaces understood by the central Bukkit listeners. Third-party
@@ -97,5 +98,16 @@ public final class EventAbilities {
         String itemKey();
 
         void onNamedItemInteract(Player player, ItemStack item);
+
+        /** Defers activation until vanilla has finished processing the triggering interaction. */
+        default boolean deferInteraction() {
+            return false;
+        }
+    }
+
+    public interface StopUsingNamedItem extends Ability {
+        String itemKey();
+
+        void onStopUsingNamedItem(Player player, PlayerStopUsingItemEvent event);
     }
 }

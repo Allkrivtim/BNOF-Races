@@ -1,6 +1,6 @@
 # 16. Angel и Monster
 
-Archangel и Seraphim получают собственные Elytra и Riptide-трезубец. Сухой рывок трезубца использует Bukkit ItemStack cooldown вместо wall-clock map.
+Archangel и Seraphim получают собственные Elytra и Riptide-трезубец. На суше interaction откладывается на tick после отказа vanilla-проверки, затем `startUsingItem` запускает настоящее удержание. Отпускание раньше 10 тиков ничего не делает; после порога вычисляется vanilla Riptide III impulse 3.0, вызывается cancellable `PlayerRiptideEvent`, добавляется velocity и запускается `startRiptideAttack(20, 8, item)`. Это даёт настоящую раскрутку, collision attack и звук Riptide III. Искусственный cooldown удалён — повторное использование ограничивает обычная зарядка трезубца.
 
 Archangel не получает fall/kinetic damage и не начинает/продолжает glide во время горения. Seraphim не носит броню: исключение сделано только для собственных крыльев с валидными owner/race/item тегами; уже надетая броня снимается при применении расы и в heartbeat. Cleanse aura снимает эффекты вокруг и больше не переустанавливает пассивы — это сохраняет задуманную возможность снять их молоком.
 
