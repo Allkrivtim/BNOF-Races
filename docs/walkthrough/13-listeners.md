@@ -336,15 +336,12 @@ public final class DeathListener implements Listener {
     }
 
     @EventHandler
-    public void onDeath(EntityDeathEvent event) {
-        Player killer = event.getEntity().getKiller();
-        if (killer == null) {
-            return;
-        }
-        raceManager.getActiveRace(killer).ifPresent(race -> {
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        raceManager.getActiveRace(player).ifPresent(race -> {
             for (Ability ability : race.abilities()) {
                 if (ability instanceof BlazebornPosthumousExplosionAbility a) {
-                    a.onKill(killer, event);
+                    a.onDeath(player, event);
                 }
             }
         });
@@ -352,9 +349,10 @@ public final class DeathListener implements Listener {
 }
 ```
 
-- `event.getEntity().getKiller()` — возвращает `Player`, который последним нанёс летальный урон погибшему существу (или `null`, если существо умерло не от рук игрока — упало, утонуло, погибло от урона окружения и т.п.).
-- `if (killer == null) return;` — если убийцы-игрока нет, способность "посмертный взрыв" в принципе неприменима (она про "при убийстве любого существа [игроком]").
-- `EntityDeathEvent` тоже не `Cancellable` — существо уже умерло к моменту наступления этого события, отменять нечего.
+- `PlayerDeathEvent` — специализированное событие смерти именно **игрока** (наследник `EntityDeathEvent`, со своими дополнениями: список дропа `getDrops()`, флаг keep-inventory и т.д.). У него нет собственного `HandlerList` — регистрация идёт в общий список `EntityDeathEvent`, но Bukkit вызовет метод только для событий подходящего типа (тот же механизм, что у `EntityDamageByEntityEvent`, см. [00-concepts.md](00-concepts.md)).
+- **История изменения:** первая версия слушала `EntityDeathEvent` и триггерила взрыв, когда Blazeborn **убивал** кого-то (`getKiller()`). Плейтест показал, что «посмертный взрыв» в диздоке означает противоположное — взрыв **при смерти самого Blazeborn**. Теперь листенер смотрит на смерть игрока и проверяет расу самого погибшего.
+- `event.getEntity()` у `PlayerDeathEvent` типизирован как `Player` — приведение типов не нужно.
+- `PlayerDeathEvent` не `Cancellable` — игрок уже умер, отменять нечего.
 
 ## `InteractListener.java` — активация именного предмета
 

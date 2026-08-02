@@ -15,6 +15,18 @@ public final class BlazebornProvider implements RaceProvider {
 
     public static final String ID = "blazeborn";
 
+    private final List<Ability> abilities = List.of(
+            new SimplePassiveEffectAbility("Постоянный Fire Resistance.",
+                    new PotionEffect(PotionEffectType.FIRE_RESISTANCE, PotionEffect.INFINITE_DURATION, 0, true, false)),
+            new BlazebornOutsideNetherAbility(),
+            new BlazebornWetPenaltyAbility(),
+            new BlazebornFireSaturationAbility(),
+            new BlazebornIgniteOnHitAbility(),
+            new BlazebornFlamingArrowsAbility(),
+            new BlazebornNoConsumeAbility(),
+            new BlazebornPosthumousExplosionAbility()
+    );
+
     @Override
     public String id() {
         return ID;
@@ -52,16 +64,6 @@ public final class BlazebornProvider implements RaceProvider {
 
     @Override
     public List<Ability> abilities() {
-        return List.of(
-                new SimplePassiveEffectAbility("Постоянный Fire Resistance.",
-                        new PotionEffect(PotionEffectType.FIRE_RESISTANCE, PotionEffect.INFINITE_DURATION, 0, true, false)),
-                new BlazebornOutsideNetherAbility(),
-                new BlazebornWetPenaltyAbility(),
-                new BlazebornFireSaturationAbility(),
-                new BlazebornIgniteOnHitAbility(),
-                new BlazebornFlamingArrowsAbility(),
-                new BlazebornNoConsumeAbility(),
-                new BlazebornPosthumousExplosionAbility()
-        );
+        return abilities;
     }
 }

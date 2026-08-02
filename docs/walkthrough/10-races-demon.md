@@ -265,10 +265,18 @@ public final class BlazebornNoConsumeAbility implements Ability {
 package dev.oneframe.races.races.demon;
 
 import dev.oneframe.races.core.Ability;
+import org.bukkit.Location;
+import org.bukkit.Particle;
+import org.bukkit.Sound;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 
+/**
+ * "Посмертный" = on the Blazeborn's OWN death: when the Blazeborn dies, everything alive
+ * within 5 blocks of the corpse takes 24 damage. (An earlier version wrongly triggered on
+ * the Blazeborn killing something - fixed after playtesting.)
+ */
 public final class BlazebornPosthumousExplosionAbility implements Ability {
 
     private static final double RADIUS = 5.0;
@@ -276,15 +284,15 @@ public final class BlazebornPosthumousExplosionAbility implements Ability {
 
     @Override
     public String description() {
-        return "Посмертный взрыв: при убийстве любого существа все живые в радиусе 5 блоков получают 24 урона.";
+        return "Посмертный взрыв: при смерти Blazeborn все живые в радиусе 5 блоков получают 24 урона.";
     }
 
-    public void onKill(Player blazeborn, EntityDeathEvent event) {
-        LivingEntity victim = event.getEntity();
-        victim.getWorld().spawnParticle(Particle.EXPLOSION_EMITTER, victim.getLocation(), 1);
-        victim.getWorld().playSound(victim.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.0f);
-        for (LivingEntity nearby : victim.getWorld().getNearbyLivingEntities(victim.getLocation(), RADIUS)) {
-            if (nearby.equals(victim) || nearby.equals(blazeborn)) {
+    public void onDeath(Player blazeborn, PlayerDeathEvent event) {
+        Location loc = blazeborn.getLocation();
+        blazeborn.getWorld().spawnParticle(Particle.EXPLOSION_EMITTER, loc, 1);
+        blazeborn.getWorld().playSound(loc, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.0f);
+        for (LivingEntity nearby : blazeborn.getWorld().getNearbyLivingEntities(loc, RADIUS)) {
+            if (nearby.equals(blazeborn)) {
                 continue;
             }
             nearby.setNoDamageTicks(0);
@@ -294,13 +302,12 @@ public final class BlazebornPosthumousExplosionAbility implements Ability {
 }
 ```
 
-- `onKill(Player blazeborn, EntityDeathEvent event)` — принимает **и** самого Blazeborn (убийцу), **и** событие смерти — оба параметра нужны: событие даёт локацию/жертву, а `blazeborn` нужен отдельно, чтобы **исключить** его самого из последующего урона по площади.
-- `spawnParticle(Particle.EXPLOSION_EMITTER, ...)` + `playSound(..., Sound.ENTITY_GENERIC_EXPLODE, ...)` — **визуальный и звуковой** эффект взрыва, добавленный по итогам плейтеста: сам урон по площади работает, но если поблизости не оказывалось других живых существ, способность выглядела как "не срабатывает вообще" — теперь виден большой взрыв частиц и слышен звук в любом случае. Это именно эффект (частицы + звук), а не настоящий взрыв (`createExplosion`) — блоки не разрушаются, дополнительного игрового урона от "взрыва" нет, весь урон наносится следующим циклом вручную.
-- `nearby.setNoDamageTicks(0)` — сброс кадров неуязвимости и здесь: цель, которая только что получала урон (например, от того же боя), без сброса могла бы частично "проглотить" 24 урона (см. [09-races-merman.md](09-races-merman.md)).
-- `victim.getWorld().getNearbyLivingEntities(victim.getLocation(), RADIUS)` — все живые существа в радиусе 5 блоков от **места смерти жертвы** (не от позиции Blazeborn — это важное уточнение: если Blazeborn убил кого-то с дальней дистанции стрелой, взрыв происходит вокруг **погибшего**, а не вокруг стрелка).
-- `if (nearby.equals(victim) || nearby.equals(blazeborn)) continue;` — исключаем из урона **саму жертву** (она и так уже мертва — `EntityDeathEvent` наступает после того, как существо формально умерло, наносить ему урон бессмысленно и потенциально вызвало бы побочные эффекты) и **самого Blazeborn** (иначе получалось бы, что убийца сам себе наносит 24 урона за каждое убийство — очевидно, не то, что задумано в ТЗ, где взрыв должен задевать "всех **живых**", подразумевая под этим окружающих, а не самого исполнителя).
-- `nearby.damage(DAMAGE)` — 24 урона каждому оставшемуся существу поблизости, включая **других игроков** (в том числе других Blazeborn, если они случайно оказались рядом) — ТЗ явно требует "все живые в радиусе", без исключения для игроков команды/фракции, поэтому здесь нет никакой проверки "свой/чужой".
-- **Потенциальный побочный эффект, о котором стоит знать:** если урон от взрыва **сам** убивает ещё кого-то в радиусе, `EntityDeathEvent` наступит для этой новой жертвы тоже, и если её убийца определяется как тот же Blazeborn (Bukkit присваивает "killer" последнему нанёсшему летальный урон, но здесь `nearby.damage(DAMAGE)` вызывается **без** указания атакующего — значит, `getKiller()` для этой второй жертвы, скорее всего, останется `null` или предыдущим значением, а не станет автоматически Blazeborn), то повторного цепного взрыва от этого же вызова не произойдёт — то есть код не рекурсивен и не зацикливается, это подтверждено дизайном (`damage(double)` без атакующего не регистрирует "убийцу" тем же способом, что `damage(double, Entity)`).
+- **История изменения (важный урок про чтение ТЗ):** первая реализация срабатывала, когда Blazeborn **убивал** любое существо (`EntityDeathEvent` + `getKiller()`). Плейтест показал, что "посмертный взрыв" в диздоке означает буквально "после **своей** смерти" — Blazeborn умирает и взрывается, как ходячий крипер. Способность полностью переписана: теперь она вызывается из [`DeathListener`](13-listeners.md) на `PlayerDeathEvent` самого Blazeborn.
+- `spawnParticle(Particle.EXPLOSION_EMITTER, ...)` + `playSound(..., Sound.ENTITY_GENERIC_EXPLODE, ...)` — **визуальный и звуковой** эффект взрыва на месте смерти. Это именно эффект (частицы + звук), а не настоящий взрыв (`createExplosion`) — блоки не разрушаются, весь урон наносится следующим циклом вручную.
+- `blazeborn.getLocation()` — на момент `PlayerDeathEvent` игрок ещё физически "существует" в мире в точке смерти, его локация валидна — взрыв происходит ровно там, где он умер.
+- `if (nearby.equals(blazeborn)) continue;` — исключаем самого умершего (он уже мёртв, наносить ему урон бессмысленно).
+- `nearby.setNoDamageTicks(0)` — сброс кадров неуязвимости: цель, только что получавшая урон (например, тот, кто и убил Blazeborn в бою), без сброса могла бы частично "проглотить" 24 урона (см. [09-races-merman.md](09-races-merman.md)).
+- `nearby.damage(DAMAGE)` — 24 урона каждому живому существу поблизости, включая игроков — ТЗ требует "все живые в радиусе", без проверки "свой/чужой". В частности, убийца Blazeborn, стоящий вплотную, почти гарантированно получает 24 урона (12 сердец) — это и есть игровой смысл способности: убивать Blazeborn в ближнем бою опасно.
 
 ## Warlock
 
@@ -349,7 +356,9 @@ public final class WarlockProvider implements RaceProvider {
         ItemStack boots = new ItemStack(Material.NETHERITE_BOOTS);
         ItemMeta meta = boots.getItemMeta();
         meta.displayName(dev.oneframe.races.util.Msg.itemName("Незеритовые ботинки"));
+        meta.setUnbreakable(true);
         meta.addEnchant(Enchantment.SOUL_SPEED, 3, true);
+        meta.addEnchant(Enchantment.BINDING_CURSE, 1, true);
         boots.setItemMeta(meta);
         return boots;
     }
@@ -357,6 +366,7 @@ public final class WarlockProvider implements RaceProvider {
 ```
 
 - Один именной предмет — незеритовые ботинки с чарами Скорости Души (Soul Speed) уровня 3 (ТЗ: "Незеритовые ботинки с Soul Speed III") — Soul Speed позволяет быстро перемещаться по "душевному песку"/"душевной почве" (характерный блок Nether). Этот чар не входит в запрещённый список, дополнительной защиты от глобального правила 4 не требуется.
+- `setUnbreakable(true)` + `Enchantment.BINDING_CURSE` — единый стандарт для всей расовой брони: неразрушимая и несъёмная (подробнее — в разборе панциря Fugu в [09-races-merman.md](09-races-merman.md)).
 
 ### `WarlockWitherImmunityAbility.java`
 

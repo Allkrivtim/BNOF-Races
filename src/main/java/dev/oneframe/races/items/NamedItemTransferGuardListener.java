@@ -5,22 +5,26 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.MerchantInventory;
 import org.bukkit.inventory.PlayerInventory;
 
 import java.util.UUID;
 
 /**
- * Blocks the practical ways a named item could leave its owner's possession: clicking/dragging
- * it into another player's inventory/ender chest or a merchant trade, hopper automation moving
- * it anywhere, and anyone but the owner picking it up off the ground. The periodic
- * {@link NamedItemService#periodicSweep} is the safety net for anything that slips past.
+ * Named items are locked to their owner's inventory entirely: they can't be dropped, can't be
+ * moved into ANY open container (chest, ender chest, anvil, merchant, ...), can't travel via
+ * hoppers, and can't be picked up off the ground by anyone but the owner. On death every tagged
+ * item is stripped (from drops and, with keep_inventory, from the inventory) - fresh copies are
+ * re-granted on respawn. The periodic {@link NamedItemService#periodicSweep} remains the safety
+ * net for anything that slips past.
  */
 public final class NamedItemTransferGuardListener implements Listener {
 
@@ -34,16 +38,43 @@ public final class NamedItemTransferGuardListener implements Listener {
     public void onClick(InventoryClickEvent event) {
         ItemStack cursor = event.getCursor();
         ItemStack current = event.getCurrentItem();
+        Inventory top = event.getView().getTopInventory();
+        // InventoryType.CRAFTING is the player's own inventory view (2x2 grid); anything else
+        // means some external container GUI is open on top.
+        boolean containerOpen = top.getType() != InventoryType.CRAFTING;
+        boolean clickedTop = event.getRawSlot() >= 0 && event.getRawSlot() < top.getSize();
+
+        if (containerOpen) {
+            // Placing a tagged item from the cursor into the open container.
+            if (clickedTop && namedItemService.isTagged(cursor)) {
+                event.setCancelled(true);
+                return;
+            }
+            // Shift-clicking a tagged item out of the player inventory into the container.
+            if (event.isShiftClick() && namedItemService.isTagged(current)) {
+                event.setCancelled(true);
+                return;
+            }
+            // Number-key swap moving a tagged hotbar item into the clicked container slot.
+            if (clickedTop && event.getHotbarButton() >= 0
+                    && namedItemService.isTagged(event.getWhoClicked().getInventory().getItem(event.getHotbarButton()))) {
+                event.setCancelled(true);
+                return;
+            }
+            // Offhand-swap key pushing a tagged offhand item into the clicked container slot.
+            if (clickedTop && event.getClick() == ClickType.SWAP_OFFHAND
+                    && namedItemService.isTagged(event.getWhoClicked().getInventory().getItemInOffHand())) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+
         Inventory target = event.getClickedInventory();
         if (target == null) {
             return;
         }
         if (isForeignDestination(target, event.getWhoClicked().getUniqueId(), cursor)
                 || isForeignDestination(target, event.getWhoClicked().getUniqueId(), current)) {
-            event.setCancelled(true);
-            return;
-        }
-        if (target instanceof MerchantInventory && (namedItemService.isTagged(cursor) || namedItemService.isTagged(current))) {
             event.setCancelled(true);
         }
     }
@@ -54,8 +85,15 @@ public final class NamedItemTransferGuardListener implements Listener {
             return;
         }
         Inventory top = event.getView().getTopInventory();
-        if (isForeignDestination(top, event.getWhoClicked().getUniqueId(), event.getOldCursor())) {
-            event.setCancelled(true);
+        if (top.getType() == InventoryType.CRAFTING) {
+            return;
+        }
+        int topSize = top.getSize();
+        for (int rawSlot : event.getRawSlots()) {
+            if (rawSlot < topSize) {
+                event.setCancelled(true);
+                return;
+            }
         }
     }
 
@@ -72,11 +110,24 @@ public final class NamedItemTransferGuardListener implements Listener {
             return holderPlayer != null && !holderPlayer.getUniqueId().equals(owner);
         }
         if (inventory.getType() == InventoryType.ENDER_CHEST) {
-            // Ender chest inventories don't expose their owner directly; fall back to the
-            // acting player - normally a player can only open their own ender chest.
             return !actor.equals(owner);
         }
         return false;
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onDrop(PlayerDropItemEvent event) {
+        if (namedItemService.isTagged(event.getItemDrop().getItemStack())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onDeath(PlayerDeathEvent event) {
+        // Remove tagged items from the death drops, and (for keep_inventory=true) from the
+        // inventory itself - respawn re-grants fresh copies via RaceManager#applyOnJoinOrRespawn.
+        event.getDrops().removeIf(namedItemService::isTagged);
+        namedItemService.stripAllTagged(event.getEntity());
     }
 
     @EventHandler(ignoreCancelled = true)

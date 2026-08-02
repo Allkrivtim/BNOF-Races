@@ -13,6 +13,14 @@ import java.util.Set;
 
 public final class BlacksmithProvider implements RaceProvider {
 
+    private final List<Ability> abilities = List.of(
+            new SimplePassiveEffectAbility("Постоянная Strength II.",
+                    new PotionEffect(PotionEffectType.STRENGTH, PotionEffect.INFINITE_DURATION, 1, true, false)),
+            new BlacksmithFreeAnvilAbility(),
+            new BlacksmithExplosionImmunityAbility(),
+            new BlacksmithSwingWeaknessAbility()
+    );
+
     @Override
     public String id() {
         return "blacksmith";
@@ -50,12 +58,6 @@ public final class BlacksmithProvider implements RaceProvider {
 
     @Override
     public List<Ability> abilities() {
-        return List.of(
-                new SimplePassiveEffectAbility("Постоянная Strength II.",
-                        new PotionEffect(PotionEffectType.STRENGTH, PotionEffect.INFINITE_DURATION, 1, true, false)),
-                new BlacksmithFreeAnvilAbility(),
-                new BlacksmithExplosionImmunityAbility(),
-                new BlacksmithSwingWeaknessAbility()
-        );
+        return abilities;
     }
 }

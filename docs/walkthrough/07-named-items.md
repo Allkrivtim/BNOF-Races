@@ -207,9 +207,15 @@ public final class NamedItemService {
     public void stripAllForRace(Player player, String raceId) {
         stripMatching(player, stack -> raceIdOf(stack).map(r -> r.equals(raceId)).orElse(false));
     }
+
+    /** Strips every tagged named item regardless of race - used on death (fresh ones are re-granted on respawn). */
+    public void stripAllTagged(Player player) {
+        stripMatching(player, stack -> true);
+    }
 ```
 
-- Публичный метод для удаления **всех** именных предметов конкретной расы у игрока (вызывается из [`RaceManager`](04-registry-manager.md) при смене/потере расы). Делегирует приватному универсальному `stripMatching`, передавая предикат "raceId предмета совпадает с указанным".
+- `stripAllForRace` — удаление именных предметов **конкретной** расы (вызывается из [`RaceManager`](04-registry-manager.md) при смене/потере расы). Делегирует приватному универсальному `stripMatching`, передавая предикат "raceId предмета совпадает с указанным".
+- `stripAllTagged` — удаление **всех** помеченных предметов без разбора расы, предикат `stack -> true`. Используется при смерти игрока (см. `NamedItemTransferGuardListener#onDeath` ниже): требование «все расовые вещи должны удаляться при смерти» не зависит от того, какой расе предмет принадлежит.
 
 ```java
     public void periodicSweep(Player player) {
@@ -281,7 +287,7 @@ public final class NamedItemService {
     }
 ```
 
-- Обобщённая (generic) вспомогательная функция: принимает `Predicate<ItemStack>` (функциональный интерфейс "проверка условия, возвращающая boolean") и удаляет из инвентаря/брони игрока все помеченные предметы, для которых предикат истинен. Используется только из `stripAllForRace` (где предикат — "raceId совпадает"), но написана достаточно общо, чтобы теоретически подойти для любых будущих условий удаления.
+- Обобщённая (generic) вспомогательная функция: принимает `Predicate<ItemStack>` (функциональный интерфейс "проверка условия, возвращающая boolean") и удаляет из инвентаря/брони игрока все помеченные предметы, для которых предикат истинен. Используется из `stripAllForRace` (предикат — "raceId совпадает") и `stripAllTagged` (предикат — всегда `true`).
 - Здесь уже проще с бронёй — не нужно сравнивать `piece.equals(...)`, потому что мы сразу знаем, какой геттер/сеттер к какому слоту относится (в отличие от `stripForeignFromEquipment`, где элементы сначала собирались в общий список для единообразного перебора).
 
 ```java
@@ -316,33 +322,86 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.MerchantInventory;
 import org.bukkit.inventory.PlayerInventory;
 
 import java.util.UUID;
 
 /**
- * Blocks the practical ways a named item could leave its owner's possession: clicking/dragging
- * it into another player's inventory/ender chest or a merchant trade, hopper automation moving
- * it anywhere, and anyone but the owner picking it up off the ground. The periodic
- * {@link NamedItemService#periodicSweep} is the safety net for anything that slips past.
+ * Named items are locked to their owner's inventory entirely: they can't be dropped, can't be
+ * moved into ANY open container (chest, ender chest, anvil, merchant, ...), can't travel via
+ * hoppers, and can't be picked up off the ground by anyone but the owner. On death every tagged
+ * item is stripped (from drops and, with keep_inventory, from the inventory) - fresh copies are
+ * re-granted on respawn. The periodic {@link NamedItemService#periodicSweep} remains the safety
+ * net for anything that slips past.
  */
 public final class NamedItemTransferGuardListener implements Listener {
 ```
 
-Этот класс блокирует **основные практические способы** передать именной предмет другому игроку — не абсолютную защиту (как честно предупреждает javadoc), а разумно достаточную для реального использования на сервере.
+Класс переписан в версии 1.0.2. Раньше он блокировал только перемещение именных предметов в **чужой** инвентарь, а обычный сундук/выбрасывание на землю оставались разрешены. Новое требование — «расовые вещи нельзя убирать из инвентаря» вообще, поэтому теперь блокируется любой путь наружу.
 
 ```java
     @EventHandler(ignoreCancelled = true)
     public void onClick(InventoryClickEvent event) {
         ItemStack cursor = event.getCursor();
         ItemStack current = event.getCurrentItem();
+        Inventory top = event.getView().getTopInventory();
+        // InventoryType.CRAFTING is the player's own inventory view (2x2 grid); anything else
+        // means some external container GUI is open on top.
+        boolean containerOpen = top.getType() != InventoryType.CRAFTING;
+        boolean clickedTop = event.getRawSlot() >= 0 && event.getRawSlot() < top.getSize();
+```
+
+- `event.getView().getTopInventory()` — «верхний» инвентарь текущего открытого окна. Ключевой трюк: когда игрок не открыл никакого контейнера, а просто смотрит в свой инвентарь, верхним считается **сетка крафта 2×2** с типом `InventoryType.CRAFTING`. Значит, `top.getType() != CRAFTING` — надёжный признак «открыт какой-то внешний контейнер» (сундук, эндер-сундук, наковальня, печь, торговля — что угодно), без перечисления всех типов вручную.
+- `event.getRawSlot()` — сквозной номер слота через **оба** инвентаря окна: слоты `0..topSize-1` принадлежат верхнему (контейнеру), дальше идут слоты инвентаря игрока. Отсюда `clickedTop` — «клик пришёлся по контейнеру, а не по своему инвентарю».
+
+```java
+        if (containerOpen) {
+            // Placing a tagged item from the cursor into the open container.
+            if (clickedTop && namedItemService.isTagged(cursor)) {
+                event.setCancelled(true);
+                return;
+            }
+            // Shift-clicking a tagged item out of the player inventory into the container.
+            if (event.isShiftClick() && namedItemService.isTagged(current)) {
+                event.setCancelled(true);
+                return;
+            }
+```
+
+Четыре разных способа положить предмет в контейнер, каждый надо перехватить отдельно:
+- **Обычный клик курсором по слоту контейнера** — предмет «в руке» (`getCursor()`) кладётся в верхний инвентарь.
+- **Shift-клик** — предмет мгновенно «перепрыгивает» из инвентаря игрока в контейнер без участия курсора; проверяется `getCurrentItem()` (предмет в кликнутом слоте). Обратите внимание: shift-клик блокируется **независимо** от того, куда пришёлся клик, — при открытом контейнере shift-клик по своему инвентарю как раз и отправляет вещь в контейнер.
+
+```java
+            // Number-key swap moving a tagged hotbar item into the clicked container slot.
+            if (clickedTop && event.getHotbarButton() >= 0
+                    && namedItemService.isTagged(event.getWhoClicked().getInventory().getItem(event.getHotbarButton()))) {
+                event.setCancelled(true);
+                return;
+            }
+            // Offhand-swap key pushing a tagged offhand item into the clicked container slot.
+            if (clickedTop && event.getClick() == ClickType.SWAP_OFFHAND
+                    && namedItemService.isTagged(event.getWhoClicked().getInventory().getItemInOffHand())) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+```
+
+- **Обмен цифровой клавишей (1–9)**: наведя курсор на слот контейнера и нажав цифру, игрок меняет местами содержимое слота хотбара и слота контейнера — курсор при этом пуст, `getCurrentItem()` содержит вещь **контейнера**, а не игрока. Поэтому проверяется именно `getHotbarButton()` (индекс нажатой клавиши, `-1` если клик не такой) и предмет в соответствующем слоте хотбара.
+- **Обмен клавишей второй руки (F)**: `ClickType.SWAP_OFFHAND` — тот же принцип, но с предметом в левой руке (`getItemInOffHand()`).
+- Без этих двух веток игрок мог бы «выложить» именной предмет в сундук одной клавишей в обход остальных проверок — типичная дыра при реализации подобных блокировок.
+
+```java
         Inventory target = event.getClickedInventory();
         if (target == null) {
             return;
@@ -350,21 +409,11 @@ public final class NamedItemTransferGuardListener implements Listener {
         if (isForeignDestination(target, event.getWhoClicked().getUniqueId(), cursor)
                 || isForeignDestination(target, event.getWhoClicked().getUniqueId(), current)) {
             event.setCancelled(true);
-            return;
-        }
-        if (target instanceof MerchantInventory && (namedItemService.isTagged(cursor) || namedItemService.isTagged(current))) {
-            event.setCancelled(true);
         }
     }
 ```
 
-- `InventoryClickEvent` — событие, срабатывающее на **любой** клик внутри любого открытого инвентаря (сундук, инвентарь игрока, стол зачарования и т.д.).
-- `event.getCursor()` — предмет, который сейчас "прилип" к курсору мыши игрока (если он что-то держит поверх курсора в момент клика).
-- `event.getCurrentItem()` — предмет, который лежит непосредственно в кликнутом слоте (до применения клика).
-- `event.getClickedInventory()` — конкретный `Inventory`, по которому кликнули (может быть `null`, если клик пришёлся вне какого-либо инвентаря — например, клик по пустому пространству за пределами открытого GUI, чтобы выбросить предмет с курсора).
-- `if (target == null) return;` — если клик не по конкретному инвентарю, эта логика неприменима (для случая "выбросить на землю" есть отдельная защита через `EntityPickupItemEvent`, см. ниже).
-- `isForeignDestination(...)` вызывается дважды: для предмета с курсора и для предмета в текущем слоте — потому что клик может как **класть** предмет с курсора в целевой инвентарь, так и **забирать** предмет оттуда (в обоих направлениях нужно проверить, не пытаемся ли мы поместить чужой именной предмет в *чужой* (не принадлежащий владельцу) инвентарь).
-- `target instanceof MerchantInventory` — отдельная проверка: если кликнутый инвентарь — это интерфейс торговли с жителем (хотя торговля и так полностью отключена глобальным правилом 6, см. [12-global-rules.md](12-global-rules.md), эта проверка — дополнительный слой защиты на случай, если торговое окно всё же как-то оказалось открыто), и туда пытаются положить помеченный предмет — отменяем.
+- Оставшаяся часть — прежняя проверка «чужой инвентарь» (`isForeignDestination`, разобрана ниже). Она нужна дополнительно к блокировке контейнеров: чужой инвентарь игрока — тоже потенциальная цель, а сработать может при нестандартных сценариях (например, GUI сторонних плагинов, отображающих чужой инвентарь).
 
 ```java
     @EventHandler(ignoreCancelled = true)
@@ -373,14 +422,21 @@ public final class NamedItemTransferGuardListener implements Listener {
             return;
         }
         Inventory top = event.getView().getTopInventory();
-        if (isForeignDestination(top, event.getWhoClicked().getUniqueId(), event.getOldCursor())) {
-            event.setCancelled(true);
+        if (top.getType() == InventoryType.CRAFTING) {
+            return;
+        }
+        int topSize = top.getSize();
+        for (int rawSlot : event.getRawSlots()) {
+            if (rawSlot < topSize) {
+                event.setCancelled(true);
+                return;
+            }
         }
     }
 ```
 
-- `InventoryDragEvent` — событие "перетаскивания" предмета мышью сразу по нескольким слотам (в отличие от одиночного клика). `event.getOldCursor()` — что было на курсоре **до** начала перетаскивания.
-- `event.getView().getTopInventory()` — "верхний" (не принадлежащий личному инвентарю игрока) инвентарь текущего открытого окна — например, сундук, который сейчас открыт, в отличие от собственного инвентаря игрока внизу экрана. Именно про верхний инвентарь имеет смысл проверять "чужой ли он" (свой собственный инвентарь игрока по определению не бывает "чужим" для самого игрока).
+- Перетаскивание мышью по нескольким слотам. `event.getOldCursor()` — что было на курсоре до начала перетаскивания; `event.getRawSlots()` — множество затронутых сквозных номеров слотов.
+- Если хотя бы один затронутый слот принадлежит верхнему инвентарю (`rawSlot < topSize`) и это внешний контейнер — операция отменяется целиком. Перетаскивание внутри собственного инвентаря (все слоты `>= topSize`) остаётся разрешённым — игрок свободно раскладывает именные вещи у себя.
 
 ```java
     private boolean isForeignDestination(Inventory inventory, UUID actor, ItemStack stack) {
@@ -396,19 +452,40 @@ public final class NamedItemTransferGuardListener implements Listener {
             return holderPlayer != null && !holderPlayer.getUniqueId().equals(owner);
         }
         if (inventory.getType() == InventoryType.ENDER_CHEST) {
-            // Ender chest inventories don't expose their owner directly; fall back to the
-            // acting player - normally a player can only open their own ender chest.
             return !actor.equals(owner);
         }
         return false;
     }
 ```
 
-- Центральная приватная проверка: "является ли данный инвентарь **чужим** для владельца этого конкретного предмета".
-- Если предмет вообще не помечен, или у него нет читаемого владельца — не наша забота, `false` (не блокируем).
-- `inventory instanceof PlayerInventory playerInventory` — если целевой инвентарь — это персональный инвентарь **какого-то** игрока (не обязательно того, кто сейчас кликает): `playerInventory.getHolder()` возвращает `HumanEntity` — самого владельца этого инвентаря (Bukkit API здесь удобно даёт ковариантный тип возврата именно для `PlayerInventory`, в отличие от общего `Inventory#getHolder()`, который возвращает более общий `InventoryHolder`). Если владелец инвентаря **не совпадает** с владельцем предмета — это чужой инвентарь, возвращаем `true` (блокировать).
-- `inventory.getType() == InventoryType.ENDER_CHEST` — эндер-сундук — особый случай: Bukkit API не даёт напрямую узнать "чей это эндер-сундук" через сам объект инвентаря (в отличие от `PlayerInventory`). Комментарий в коде честно объясняет компромисс: раз обычно игрок может открыть **только свой собственный** эндер-сундук (без специальных прав/плагинов), используем как приближение того, кто **сейчас кликает** (`actor`) — если кликающий не является владельцем предмета, считаем инвентарь чужим.
-- Если ни один из этих двух случаев не подошёл (например, это обычный сундук в мире — он никому конкретно не принадлежит) — возвращаем `false`: класть именной предмет в обычный сундук технически разрешено этим конкретным листенером (полная защита от "оставить в сундуке, а потом другой заберёт" обеспечивается на более низком уровне — через блокировку `EntityPickupItemEvent` для *подбора* чужого предмета, и через периодический `periodicSweep`, который в теории может заметить чужой предмет, если он окажется в инвентаре другого игрока каким-то образом).
+- Не изменилась с прошлой версии: определяет, принадлежит ли целевой инвентарь **не владельцу** предмета. `PlayerInventory#getHolder()` даёт самого игрока-хозяина инвентаря (ковариантный возврат `HumanEntity` — удобнее общего `InventoryHolder`). Эндер-сундук своего владельца через API не раскрывает, поэтому используется приближение «кто сейчас кликает» (обычно игрок может открыть только свой эндер-сундук).
+
+```java
+    @EventHandler(ignoreCancelled = true)
+    public void onDrop(PlayerDropItemEvent event) {
+        if (namedItemService.isTagged(event.getItemDrop().getItemStack())) {
+            event.setCancelled(true);
+        }
+    }
+```
+
+- `PlayerDropItemEvent` — выбрасывание предмета на землю (клавиша Q или перетаскивание за пределы окна). Полностью запрещено для именных предметов — прямое требование «нельзя убирать из инвентаря».
+- `event.getItemDrop()` — уже созданная сущность-предмет; `getItemStack()` — стек внутри неё. Отмена события возвращает предмет в инвентарь.
+
+```java
+    @EventHandler
+    public void onDeath(PlayerDeathEvent event) {
+        // Remove tagged items from the death drops, and (for keep_inventory=true) from the
+        // inventory itself - respawn re-grants fresh copies via RaceManager#applyOnJoinOrRespawn.
+        event.getDrops().removeIf(namedItemService::isTagged);
+        namedItemService.stripAllTagged(event.getEntity());
+    }
+```
+
+- Реализация требования «все расовые вещи должны удаляться при смерти», причём в **обоих** режимах игры:
+  - `event.getDrops()` — изменяемый список того, что выпадет на землю; `removeIf(namedItemService::isTagged)` вычищает оттуда именные предметы, чтобы они не валялись на месте гибели и не достались другим.
+  - `stripAllTagged(event.getEntity())` — убирает их из самого инвентаря. Это важно при `keep_inventory = true`: в этом режиме список `getDrops()` пуст, вещи остаются у игрока, и без явной зачистки именные предметы пережили бы смерть.
+- Потери для владельца нет: на респавне [`RaceManager#applyOnJoinOrRespawn`](04-registry-manager.md) вызовет `grantMissing` и выдаст свежие копии.
 
 ```java
     @EventHandler(ignoreCancelled = true)
@@ -417,11 +494,7 @@ public final class NamedItemTransferGuardListener implements Listener {
             event.setCancelled(true);
         }
     }
-```
 
-- `InventoryMoveItemEvent` — событие автоматического перемещения предмета между инвентарями (классический пример — хоппер, засасывающий предметы из сундука в другой сундук/печку). Если перемещаемый предмет помечен как именной — **безусловно** отменяем перемещение, независимо от направления или инвентарей-участников: именные предметы не должны участвовать в автоматизации вообще.
-
-```java
     @EventHandler(ignoreCancelled = true)
     public void onPickup(EntityPickupItemEvent event) {
         ItemStack stack = event.getItem().getItemStack();
@@ -439,10 +512,8 @@ public final class NamedItemTransferGuardListener implements Listener {
 }
 ```
 
-- `EntityPickupItemEvent` — событие подбора **любой** сущностью (не только игроком — теоретически и мобы, и Аллеи умеют подбирать предметы с земли) предмета, лежащего на земле. `event.getItem()` возвращает игровую сущность-предмет (`org.bukkit.entity.Item` — представление физически лежащего на земле стека), а `.getItemStack()` — сам `ItemStack` внутри неё.
-- Если предмет не помечен — не наша забота.
-- Если владелец не читается — тоже пропускаем (не блокируем неопределённое состояние).
-- `!(event.getEntity() instanceof Player player) || !player.getUniqueId().equals(owner)` — блокируем подбор, если **либо** подбирающая сущность вообще не игрок (значит, это моб/Аллей/что угодно ещё — им точно нельзя подбирать чужие именные предметы), **либо** это игрок, но не тот, кому предмет принадлежит. Реализует требование "нельзя подобрать чужой с земли" буквально — предмет просто останется лежать на земле до тех пор, пока его не подберёт настоящий владелец (или пока не истечёт стандартное время жизни предмета на земле — это уже ванильная механика Minecraft, плагин её не трогает).
+- `InventoryMoveItemEvent` — автоматическое перемещение предметов между инвентарями (воронки, дропперы). Именные предметы не участвуют в автоматизации никогда — безусловная отмена.
+- `EntityPickupItemEvent` — подбор с земли **любой** сущностью (игроки, мобы, Аллеи). Блокируется, если подбирающий не игрок **или** не владелец предмета. Реализует «нельзя подобрать чужой с земли»: предмет остаётся лежать, пока его не подберёт хозяин или пока он не исчезнет по ванильному таймауту.
 
 ---
 

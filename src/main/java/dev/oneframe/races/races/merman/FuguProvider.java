@@ -21,6 +21,9 @@ public final class FuguProvider implements RaceProvider {
 
     public static final String ID = "fugu";
 
+    // Cached once - see note in MarinianProvider: rebuilding per call resets TickAbility state.
+    private final List<Ability> abilities = createAbilities();
+
     @Override
     public String id() {
         return ID;
@@ -58,13 +61,17 @@ public final class FuguProvider implements RaceProvider {
 
     @Override
     public List<Ability> abilities() {
-        List<Ability> abilities = new ArrayList<>(MermanShared.sharedAbilities());
-        abilities.add(new SimplePassiveEffectAbility("Постоянные Dolphin's Grace, Resistance III и Slowness IV.",
+        return abilities;
+    }
+
+    private List<Ability> createAbilities() {
+        List<Ability> list = new ArrayList<>(MermanShared.sharedAbilities());
+        list.add(new SimplePassiveEffectAbility("Постоянные Dolphin's Grace, Resistance III и Slowness IV.",
                 new PotionEffect(PotionEffectType.DOLPHINS_GRACE, PotionEffect.INFINITE_DURATION, 0, true, false),
                 new PotionEffect(PotionEffectType.RESISTANCE, PotionEffect.INFINITE_DURATION, 2, true, false),
                 new PotionEffect(PotionEffectType.SLOWNESS, PotionEffect.INFINITE_DURATION, 3, true, false)));
-        abilities.add(new FuguPoisonTouchAbility());
-        return abilities;
+        list.add(new FuguPoisonTouchAbility());
+        return List.copyOf(list);
     }
 
     @Override
@@ -76,7 +83,9 @@ public final class FuguProvider implements RaceProvider {
         ItemStack helmet = new ItemStack(Material.TURTLE_HELMET);
         ItemMeta meta = helmet.getItemMeta();
         meta.displayName(dev.oneframe.races.util.Msg.itemName("Черепаший панцирь"));
+        meta.setUnbreakable(true);
         meta.addEnchant(Enchantment.THORNS, 3, true);
+        meta.addEnchant(Enchantment.BINDING_CURSE, 1, true);
         helmet.setItemMeta(meta);
         return helmet;
     }

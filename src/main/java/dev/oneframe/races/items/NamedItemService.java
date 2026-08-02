@@ -120,6 +120,11 @@ public final class NamedItemService {
         stripMatching(player, stack -> raceIdOf(stack).map(r -> r.equals(raceId)).orElse(false));
     }
 
+    /** Strips every tagged named item regardless of race - used on death (fresh ones are re-granted on respawn). */
+    public void stripAllTagged(Player player) {
+        stripMatching(player, stack -> true);
+    }
+
     /** Dedupes to one copy per item-key and removes any tagged item not owned by this player. */
     public void periodicSweep(Player player) {
         Map<String, Boolean> seen = new HashMap<>();

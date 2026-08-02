@@ -23,6 +23,11 @@ public final class MarinianProvider implements RaceProvider {
 
     private final MarinianBattleCryAbility battleCryAbility = new MarinianBattleCryAbility();
 
+    // Built ONCE and cached: TickAbility instances (land suffocation) keep per-player state in
+    // fields, and abilities() is called every tick pass - rebuilding fresh instances each call
+    // silently reset that state (real v1.0.1 bug: merman air never depleted on land).
+    private final List<Ability> abilities = createAbilities();
+
     @Override
     public String id() {
         return ID;
@@ -60,11 +65,15 @@ public final class MarinianProvider implements RaceProvider {
 
     @Override
     public List<Ability> abilities() {
-        List<Ability> abilities = new ArrayList<>(MermanShared.sharedAbilities());
-        abilities.add(new SimplePassiveEffectAbility("Постоянная Dolphin's Grace.",
-                new PotionEffect(PotionEffectType.DOLPHINS_GRACE, PotionEffect.INFINITE_DURATION, 0, true, false)));
-        abilities.add(battleCryAbility);
         return abilities;
+    }
+
+    private List<Ability> createAbilities() {
+        List<Ability> list = new ArrayList<>(MermanShared.sharedAbilities());
+        list.add(new SimplePassiveEffectAbility("Постоянная Dolphin's Grace.",
+                new PotionEffect(PotionEffectType.DOLPHINS_GRACE, PotionEffect.INFINITE_DURATION, 0, true, false)));
+        list.add(battleCryAbility);
+        return List.copyOf(list);
     }
 
     @Override
@@ -79,6 +88,7 @@ public final class MarinianProvider implements RaceProvider {
         ItemStack horn = new ItemStack(Material.GOAT_HORN);
         ItemMeta meta = horn.getItemMeta();
         meta.displayName(dev.oneframe.races.util.Msg.itemName("Battle Cry"));
+        meta.setUnbreakable(true);
         horn.setItemMeta(meta);
         return horn;
     }

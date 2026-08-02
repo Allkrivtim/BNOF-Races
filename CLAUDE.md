@@ -40,8 +40,8 @@ src/main/java/dev/oneframe/races/
 ├── items/
 │   ├── NamedItemKeys.java          NamespacedKey: oneframe:named_owner/named_race/named_item_key
 │   ├── NamedItemDefinition.java    record: itemKey, raceId, Supplier<ItemStack> template
-│   ├── NamedItemService.java       tag/isTagged/owner/grantMissing/stripAllForRace/periodicSweep
-│   └── NamedItemTransferGuardListener.java  блокирует клик/драг/hopper/pickup чужого именного предмета
+│   ├── NamedItemService.java       tag/isTagged/owner/grantMissing/stripAllForRace/stripAllTagged/periodicSweep
+│   └── NamedItemTransferGuardListener.java  полный локдаун: нельзя выбросить/сложить в любой контейнер/hopper/чужой pickup; на смерти все предметы зачищаются (перевыдаются на респавне)
 ├── races/
 │   ├── human/       ForesterProvider (+4 ability), BlacksmithProvider (+3 ability)
 │   ├── merman/      MermanShared (общая логика), MarinianProvider (+2), FuguProvider (+1)
@@ -66,7 +66,7 @@ src/main/java/dev/oneframe/races/
 │   ├── PotionEffectListener.java   EntityPotionEffectEvent (2 иммунитета: Forester, Warlock)
 │   ├── ShootBowListener.java       EntityShootBowEvent (Blazeborn flaming arrows - выстрел)
 │   ├── ProjectileHitListener.java  ProjectileHitEvent (Blazeborn flaming arrows - попадание)
-│   ├── DeathListener.java          EntityDeathEvent (Blazeborn posthumous explosion)
+│   ├── DeathListener.java          PlayerDeathEvent (взрыв при смерти самого Blazeborn)
 │   ├── InteractListener.java       PlayerInteractEvent (активация рога Marinian)
 │   └── PlayerLifecycleListener.java PlayerJoinEvent/PlayerRespawnEvent -> applyOnJoinOrRespawn (delayed 1 tick)
 ├── commands/
@@ -160,7 +160,9 @@ players:
 | `EntityPotionEffectEvent` | `PotionEffectListener` | NORMAL | true |
 | `EntityShootBowEvent` | `ShootBowListener` | NORMAL | true |
 | `ProjectileHitEvent` | `ProjectileHitListener` | NORMAL | не Cancellable |
-| `EntityDeathEvent` | `DeathListener` | NORMAL | не Cancellable |
+| `PlayerDeathEvent` | `DeathListener` (взрыв Blazeborn) | NORMAL | не Cancellable |
+| `PlayerDeathEvent` | `NamedItemTransferGuardListener` (зачистка именных) | NORMAL | не Cancellable |
+| `PlayerDropItemEvent` | `NamedItemTransferGuardListener` | NORMAL | true |
 | `PlayerInteractEvent` | `InteractListener` | NORMAL | true |
 | `PlayerJoinEvent` | `PlayerLifecycleListener` | NORMAL | — |
 | `PlayerRespawnEvent` | `PlayerLifecycleListener` | **MONITOR** | — (нужно финальное состояние респавна) |
@@ -201,6 +203,8 @@ players:
 - **Paper API** `1.21.11-R0.1-SNAPSHOT`, `compileOnly` (не пакуется в jar — сервер предоставляет реализацию в рантайме).
 - **`-Xlint:deprecation` включён постоянно** в `compileJava` — при добавлении нового кода проверяйте вывод сборки на предупреждения о deprecated API (Paper активно переименовывает атрибуты/методы между минорными версиями — см. историю: `AnvilInventory#setRepairCost` → `AnvilView#setRepairCost`, `Entity#isInWaterOrRain()` → `isInWater() || isInRain()`, `Attribute.GENERIC_*` → `Attribute.*`).
 - **Amплификатор зелья = уровень - 1** (Speed II = амплификатор `1`) — частый источник ошибок при добавлении новых эффектов, перепроверяйте при код-ревью.
+- **`abilities()` провайдера обязан возвращать закешированный список (поле класса)** — `TickAbility` хранят per-player состояние в полях, а `abilities()` вызывается каждый тик; пересоздание экземпляров на каждый вызов молча сбрасывает состояние (реальный баг v1.0.1: кислород Merman никогда не истощался).
+- **Именные предметы:** вся броня — с `BINDING_CURSE` (несъёмная) и `setUnbreakable(true)`; все предметы неразрушимы; при смерти зачищаются (`stripAllTagged` + фильтр drops) и перевыдаются на респавне; из инвентаря владельца их нельзя выбросить или переложить в любой контейнер.
 - **Периодический урон — всегда `setNoDamageTicks(0)` перед `damage()`** — иначе урон "съедается" кадрами неуязвимости от предыдущего тика урона (Wither/Poison/другой источник); так сделано во всех тиковых способностях/правилах с уроном.
 - **`getInventory().getContents()` содержит `null` для пустых слотов** — оборачивать только в `Arrays.asList(...)`, НЕ в `List.of(...)` (бросает NPE на null-элементах; это был реальный продовый баг v1.0.0).
 - **Спавн сущности по образцу другой** — только `world.spawnEntity(loc, entity.getType())`; `spawn(loc, entity.getClass())` падает, т.к. `getClass()` возвращает CraftBukkit-класс реализации (CraftCow), а не Bukkit-интерфейс.
@@ -224,14 +228,14 @@ players:
 ## Как собрать, запустить, отладить
 
 ```bash
-./gradlew clean build            # -> build/libs/OneFrameRaces-1.0.1.jar
+./gradlew clean build            # -> build/libs/OneFrameRaces-1.0.2.jar
 ```
 
 Локальный smoke-тест (пример, использовался при разработке):
 ```bash
 # скачать Paper 1.21.11 (см. https://fill.papermc.io/v3/projects/paper/versions/1.21.11)
 echo "eula=true" > eula.txt
-cp build/libs/OneFrameRaces-1.0.1.jar plugins/
+cp build/libs/OneFrameRaces-1.0.2.jar plugins/
 java -Xmx2G -jar paper-1.21.11-*.jar --nogui
 ```
 В консоли сервера проверить: `race list`, `race info forester`, `race set <online-player> forester`, `race reload`. Ожидаемая строка при старте: `[OneFrameRaces] OneFrameRaces enabled with 8 race(s).`

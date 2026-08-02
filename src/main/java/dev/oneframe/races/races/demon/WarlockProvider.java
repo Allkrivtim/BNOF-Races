@@ -17,6 +17,12 @@ public final class WarlockProvider implements RaceProvider {
 
     public static final String ID = "warlock";
 
+    private final List<Ability> abilities = List.of(
+            new WarlockWitherImmunityAbility(),
+            new WarlockOutsideNetherPoisonAbility(),
+            new WarlockVampiricStrikeAbility()
+    );
+
     @Override
     public String id() {
         return ID;
@@ -54,11 +60,7 @@ public final class WarlockProvider implements RaceProvider {
 
     @Override
     public List<Ability> abilities() {
-        return List.of(
-                new WarlockWitherImmunityAbility(),
-                new WarlockOutsideNetherPoisonAbility(),
-                new WarlockVampiricStrikeAbility()
-        );
+        return abilities;
     }
 
     @Override
@@ -70,7 +72,9 @@ public final class WarlockProvider implements RaceProvider {
         ItemStack boots = new ItemStack(Material.NETHERITE_BOOTS);
         ItemMeta meta = boots.getItemMeta();
         meta.displayName(dev.oneframe.races.util.Msg.itemName("Незеритовые ботинки"));
+        meta.setUnbreakable(true);
         meta.addEnchant(Enchantment.SOUL_SPEED, 3, true);
+        meta.addEnchant(Enchantment.BINDING_CURSE, 1, true);
         boots.setItemMeta(meta);
         return boots;
     }

@@ -13,6 +13,15 @@ import java.util.Set;
 
 public final class ForesterProvider implements RaceProvider {
 
+    private final List<Ability> abilities = List.of(
+            new SimplePassiveEffectAbility("Постоянная Luck.",
+                    new PotionEffect(PotionEffectType.LUCK, PotionEffect.INFINITE_DURATION, 0, true, false)),
+            new ForesterBreedAbility(),
+            new ForesterFishingAbility(),
+            new ForesterPoisonImmunityAbility(),
+            new ForesterDamageSpeedAbility()
+    );
+
     @Override
     public String id() {
         return "forester";
@@ -50,13 +59,6 @@ public final class ForesterProvider implements RaceProvider {
 
     @Override
     public List<Ability> abilities() {
-        return List.of(
-                new SimplePassiveEffectAbility("Постоянная Luck.",
-                        new PotionEffect(PotionEffectType.LUCK, PotionEffect.INFINITE_DURATION, 0, true, false)),
-                new ForesterBreedAbility(),
-                new ForesterFishingAbility(),
-                new ForesterPoisonImmunityAbility(),
-                new ForesterDamageSpeedAbility()
-        );
+        return abilities;
     }
 }

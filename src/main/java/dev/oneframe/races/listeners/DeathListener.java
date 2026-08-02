@@ -6,7 +6,7 @@ import dev.oneframe.races.races.demon.BlazebornPosthumousExplosionAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 
 public final class DeathListener implements Listener {
 
@@ -17,15 +17,12 @@ public final class DeathListener implements Listener {
     }
 
     @EventHandler
-    public void onDeath(EntityDeathEvent event) {
-        Player killer = event.getEntity().getKiller();
-        if (killer == null) {
-            return;
-        }
-        raceManager.getActiveRace(killer).ifPresent(race -> {
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        raceManager.getActiveRace(player).ifPresent(race -> {
             for (Ability ability : race.abilities()) {
                 if (ability instanceof BlazebornPosthumousExplosionAbility a) {
-                    a.onKill(killer, event);
+                    a.onDeath(player, event);
                 }
             }
         });

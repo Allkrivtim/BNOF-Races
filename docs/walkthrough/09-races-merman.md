@@ -134,10 +134,11 @@ import org.bukkit.potion.PotionEffectType;
 public final class MermanConditionalEffectsAbility implements TickAbility {
 
     private static final int DURATION_TICKS = 60;
+    private static final int HASTE_DURATION_TICKS = 20;
 
     @Override
     public String description() {
-        return "В воде/под дождём - Night Vision, Dolphin's Grace, Haste II и полный кислород.";
+        return "В воде/под дождём - Night Vision и Dolphin's Grace; под водой - Haste III (1 сек) и полный кислород.";
     }
 
     @Override
@@ -148,14 +149,19 @@ public final class MermanConditionalEffectsAbility implements TickAbility {
         player.setRemainingAir(player.getMaximumAir());
         player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, DURATION_TICKS, 0, true, false));
         player.addPotionEffect(new PotionEffect(PotionEffectType.DOLPHINS_GRACE, DURATION_TICKS, 0, true, false));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, DURATION_TICKS, 1, true, false));
+        if (player.isInWater()) {
+            // 1-second Haste III, refreshed every pass while submerged - lapses almost
+            // immediately after leaving the water (per playtest feedback).
+            player.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, HASTE_DURATION_TICKS, 2, true, false));
+        }
     }
 }
 ```
 
 - `DURATION_TICKS = 60` — 3 секунды. **Ключевая идея:** длительность каждого эффекта **короче**, чем интервал между тиками способности (тик раз в секунду, а эффект держится 3 секунды) — сделано специально: если игрок **выходит** из воды/дождя, способность просто перестаёт обновлять (`refresh`) эффект каждую секунду, и он естественным образом угасает через оставшиеся до 3 секунд — то есть отдельно писать код "убрать эффект, если условие больше не выполняется" не нужно, эффект просто "истекает сам" при прекращении обновления. Это — распространённый в Bukkit-плагинах приём, экономящий явную логику снятия эффектов.
 - `player.setRemainingAir(player.getMaximumAir())` — это **ванильный** запас воздуха игрока (не наш собственный `airLevel` из предыдущего класса!) — здесь он принудительно выставляется на максимум (`getMaximumAir()`, обычно 300 у игрока по умолчанию — да, число совпадает с нашей константой `MAX_AIR`, но это два **разных** счётчика, просто выбрано одинаковое "круглое" число). Технически это может быть избыточно (в воде и так постоянное дыхание за счёт пассивки Water Breathing, ванильный воздух и не должен тратиться), но это явная защитная мера "полный кислород" из ТЗ, гарантирующая, что даже если что-то пошло не так с пассивным эффектом, ванильный запас воздуха всё равно на максимуме.
-- Три эффекта — `NIGHT_VISION` (ночное зрение), `DOLPHINS_GRACE` (грация дельфина — ускоренное плавание) с амплификатором `0` (уровень I), и `HASTE` (ускоренная добыча блоков) с амплификатором `1` (**уровень II** — поднят с I по итогам плейтеста: Haste I недостаточно компенсировал ванильный 5-кратный штраф скорости добычи под водой), `ambient=true, particles=false`.
+- `NIGHT_VISION` (ночное зрение) и `DOLPHINS_GRACE` (грация дельфина) — амплификатор `0` (уровень I), 3-секундная обновляемая длительность, условие — вода **или** дождь.
+- `HASTE` (ускоренная добыча) — отдельное, более узкое условие: только **под водой** (`isInWater()`, без дождя), **уровень III** (амплификатор `2`), длительность ровно **20 тиков = 1 секунда** — эффект гаснет почти сразу после выхода из воды, а не тянется 3 секунды, как остальные (точные параметры зафиксированы по итогам плейтеста: Haste III перекрывает ванильный 5-кратный штраф скорости добычи под водой).
 - Если условие (`isInWater() || isInRain()`) не выполняется — метод сразу выходит (`return`) без каких-либо действий; никакого "снятия" эффектов явно не происходит — они просто со временем истекут сами (см. предыдущий абзац).
 
 ## `MermanNetherFireAbility.java` — лёгкое горение в Nether
@@ -199,10 +205,16 @@ public final class MarinianProvider implements RaceProvider {
     public static final String ID = "marinian";
 
     private final MarinianBattleCryAbility battleCryAbility = new MarinianBattleCryAbility();
+
+    // Built ONCE and cached: TickAbility instances (land suffocation) keep per-player state in
+    // fields, and abilities() is called every tick pass - rebuilding fresh instances each call
+    // silently reset that state (real v1.0.1 bug: merman air never depleted on land).
+    private final List<Ability> abilities = createAbilities();
 ```
 
 - `public static final String ID = "marinian"` — в отличие от Forester/Blacksmith (где `id()` просто возвращает строковый литерал напрямую), здесь id вынесен в публичную константу. Причина: эта же строка нужна повторно ниже — как `raceId` в `NamedItemDefinition` (см. `namedItems()`) — вынос в константу избавляет от дублирования литерала `"marinian"` в двух местах файла и снижает риск опечатки в одном из них.
-- `private final MarinianBattleCryAbility battleCryAbility = new MarinianBattleCryAbility()` — **инициализация поля класса**, а не создание нового объекта внутри `abilities()`. Это важное отличие от способа, которым созданы способности Forester/Blacksmith (там `new ForesterBreedAbility()` создаётся заново внутри `List.of(...)` в `abilities()`, вызываемом потенциально много раз). Здесь способность создаётся **один раз** при создании `MarinianProvider` (который сам по себе создаётся один раз через `ServiceLoader` при старте плагина) и хранится в поле — потому что `MarinianBattleCryAbility` **содержит состояние** (карту кулдаунов по игрокам, `lastUse`), и если бы `abilities()` каждый раз создавал новый экземпляр, все кулдауны сбрасывались бы при каждом вызове `abilities()` (а он вызывается **очень часто** — при каждом тике, при каждой команде `/race info`, и т.д.) — то есть кулдаун вообще никогда бы не сработал.
+- Оба поля — `battleCryAbility` и закешированный список `abilities` — создаются **один раз** при создании провайдера (а провайдер создаётся один раз через `ServiceLoader`). Это принципиально, потому что способности с состоянием (`battleCryAbility` — кулдауны по игрокам; `MermanLandSuffocationAbility` в общем списке — счётчик кислорода по игрокам) обязаны жить в единственном экземпляре.
+- **История реального бага (v1.0.1):** первая версия строила список заново **внутри** метода `abilities()` при каждом вызове. А `abilities()` вызывается каждую секунду из `RaceManager#tickAbilities` — значит, `MermanLandSuffocationAbility` пересоздавалась ежесекундно с пустой картой `airLevel`, счётчик кислорода всякий раз стартовал с максимума и **никогда не истощался**: «инверсия дыхания» просто не работала, без единой ошибки в логах. Теперь списки закешированы во **всех** провайдерах (включая расы без состояния — для единообразия), правило зафиксировано в `CLAUDE.md`.
 
 ```java
     @Override
@@ -227,15 +239,20 @@ public final class MarinianProvider implements RaceProvider {
 ```java
     @Override
     public List<Ability> abilities() {
-        List<Ability> abilities = new ArrayList<>(MermanShared.sharedAbilities());
-        abilities.add(new SimplePassiveEffectAbility("Постоянная Dolphin's Grace.",
-                new PotionEffect(PotionEffectType.DOLPHINS_GRACE, PotionEffect.INFINITE_DURATION, 0, true, false)));
-        abilities.add(battleCryAbility);
         return abilities;
+    }
+
+    private List<Ability> createAbilities() {
+        List<Ability> list = new ArrayList<>(MermanShared.sharedAbilities());
+        list.add(new SimplePassiveEffectAbility("Постоянная Dolphin's Grace.",
+                new PotionEffect(PotionEffectType.DOLPHINS_GRACE, PotionEffect.INFINITE_DURATION, 0, true, false)));
+        list.add(battleCryAbility);
+        return List.copyOf(list);
     }
 ```
 
-- `new ArrayList<>(MermanShared.sharedAbilities())` — берём **изменяемую копию** общего списка способностей (`sharedAbilities()` возвращает неизменяемый `List.of(...)`, поэтому нельзя напрямую в него `add` — пришлось бы получить `UnsupportedOperationException`; оборачивание в `new ArrayList<>(...)` решает эту проблему, копируя элементы в изменяемый список).
+- `abilities()` теперь просто возвращает закешированное поле; сборка списка вынесена в приватный `createAbilities()`, вызываемый один раз при инициализации поля (см. историю бага выше).
+- `new ArrayList<>(MermanShared.sharedAbilities())` — берём **изменяемую копию** общего списка способностей (`sharedAbilities()` возвращает неизменяемый `List.of(...)`, поэтому нельзя напрямую в него `add` — пришлось бы получить `UnsupportedOperationException`); финальный `List.copyOf(...)` снова замораживает результат в неизменяемый список.
 - Затем добавляются **специфичные для Marinian** элементы: своя собственная пассивка Dolphin's Grace (обратите внимание — это **отдельный, дополнительный** Dolphin's Grace, поверх того, что уже условно накладывается через `MermanConditionalEffectsAbility` только в воде/дожде; здесь этот эффект **постоянный**, не зависящий от воды — вместе они создают "всегда хотя бы базовый уровень грации, а в воде/дожде — обновляемый явно" — на практике оба эффекта одного типа просто перезаписывают/поддерживают друг друга, конфликта нет, потому что Bukkit API просто хранит **один** активный эффект каждого типа с наибольшим приоритетом на момент проверки), и сама способность рога `battleCryAbility` (созданная один раз в поле, как описано выше).
 
 ```java
@@ -258,6 +275,7 @@ public final class MarinianProvider implements RaceProvider {
         ItemStack horn = new ItemStack(Material.GOAT_HORN);
         ItemMeta meta = horn.getItemMeta();
         meta.displayName(dev.oneframe.races.util.Msg.itemName("Battle Cry"));
+        meta.setUnbreakable(true);
         horn.setItemMeta(meta);
         return horn;
     }
@@ -265,7 +283,7 @@ public final class MarinianProvider implements RaceProvider {
 
 - `Material.GOAT_HORN` — базовый предмет "козлиный рог" (в ванильном Minecraft используется для звуковых сигналов) — выбран как визуальная основа для именного предмета "Battle Cry".
 - `meta.displayName(Msg.itemName("Battle Cry"))` — устанавливает отображаемое имя предмета через `Component` (современный, не устаревший API — см. подробнее про `Msg.itemName` в [15-util.md](15-util.md), где объясняется, зачем нужна отдельная утилита вместо простого `Component.text(...)`).
-- Никаких зачарований или флага "неразрушимый" здесь нет — рог сам по себе не наносится урон при использовании, ему не нужна прочность.
+- `setUnbreakable(true)` — у рога нет прочности как таковой, но флаг ставится на **все** именные предметы единообразно (требование "все расовые вещи неразрушимы").
 
 ```java
     private static ItemStack createSteelClaws() {
@@ -390,21 +408,27 @@ public final class FuguProvider implements RaceProvider {
 - `hp() = 20`, `sp() = 6` — согласно ТЗ ("HP 20, armor 6" — заметно больше брони, чем у Marinian, отражая более "танковую" роль Fugu).
 
 ```java
+    // Cached once - see note in MarinianProvider: rebuilding per call resets TickAbility state.
+    private final List<Ability> abilities = createAbilities();
+
     @Override
     public List<Ability> abilities() {
-        List<Ability> abilities = new ArrayList<>(MermanShared.sharedAbilities());
-        abilities.add(new SimplePassiveEffectAbility("Постоянные Dolphin's Grace, Resistance III и Slowness IV.",
+        return abilities;
+    }
+
+    private List<Ability> createAbilities() {
+        List<Ability> list = new ArrayList<>(MermanShared.sharedAbilities());
+        list.add(new SimplePassiveEffectAbility("Постоянные Dolphin's Grace, Resistance III и Slowness IV.",
                 new PotionEffect(PotionEffectType.DOLPHINS_GRACE, PotionEffect.INFINITE_DURATION, 0, true, false),
                 new PotionEffect(PotionEffectType.RESISTANCE, PotionEffect.INFINITE_DURATION, 2, true, false),
                 new PotionEffect(PotionEffectType.SLOWNESS, PotionEffect.INFINITE_DURATION, 3, true, false)));
-        abilities.add(new FuguPoisonTouchAbility());
-        return abilities;
+        list.add(new FuguPoisonTouchAbility());
+        return List.copyOf(list);
     }
 ```
 
-- Тот же паттерн, что у Marinian: копия общего списка + собственная пассивка + собственная активная способность.
+- Тот же паттерн, что у Marinian: закешированное поле + копия общего списка + собственная пассивка + собственная активная способность.
 - Пассивка Fugu — **сразу три** постоянных эффекта в одном вызове `SimplePassiveEffectAbility` благодаря varargs-конструктору (см. [03-core-interfaces.md](03-core-interfaces.md)): Dolphin's Grace I (амплификатор `0`), **Resistance III** (амплификатор `2`) и **Slowness IV** (амплификатор `3`) — конкретные уровни зафиксированы по итогам плейтеста (изначально оба были уровня I), отражая образ очень медлительной, но крайне защищённой рыбы-собаки. Снова помните правило "амплификатор = уровень − 1".
-- `FuguPoisonTouchAbility` создаётся напрямую внутри `List.of(...)` (не хранится в поле, как у Marinian), потому что у неё **нет** собственного внутреннего состояния (нет кулдаунов, карт по игрокам и т.п.) — пересоздание нового экземпляра при каждом вызове `abilities()` абсолютно безопасно.
 
 ```java
     @Override
@@ -416,14 +440,18 @@ public final class FuguProvider implements RaceProvider {
         ItemStack helmet = new ItemStack(Material.TURTLE_HELMET);
         ItemMeta meta = helmet.getItemMeta();
         meta.displayName(dev.oneframe.races.util.Msg.itemName("Черепаший панцирь"));
+        meta.setUnbreakable(true);
         meta.addEnchant(Enchantment.THORNS, 3, true);
+        meta.addEnchant(Enchantment.BINDING_CURSE, 1, true);
         helmet.setItemMeta(meta);
         return helmet;
     }
 }
 ```
 
-- Один именной предмет — черепаший панцирь (`Material.TURTLE_HELMET`) с чарами Терний (Thorns) уровня 3 — соответствует ТЗ буквально ("шлем с Thorns III"). Thorns не входит в список запрещённых чар, так что дополнительной специальной обработки для исключения из глобального правила 4 здесь не требуется (в отличие от Silk Touch на когтях Marinian).
+- Один именной предмет — черепаший панцирь (`Material.TURTLE_HELMET`) с чарами Терний (Thorns) уровня 3 — соответствует ТЗ буквально ("шлем с Thorns III"). Thorns не входит в список запрещённых чар, так что дополнительной обработки для исключения из глобального правила 4 здесь не требуется (в отличие от Silk Touch на когтях Marinian).
+- `Enchantment.BINDING_CURSE` (Проклятие несъёмности) — **вся расовая броня** несёт это проклятие: надетый предмет нельзя снять из слота брони вручную, он снимается только при смерти. Ванильный механизм, ровно соответствующий требованию "у всех расовых элементов брони проклятье несъёмности".
+- `setUnbreakable(true)` — броня не теряет прочность и никогда не ломается.
 
 ```java
 package dev.oneframe.races.races.merman;
