@@ -1,6 +1,7 @@
 package dev.oneframe.races.races.angel;
 
 import dev.oneframe.races.core.Ability;
+import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
@@ -44,5 +45,9 @@ public final class AngelTridentBoostAbility implements Ability {
         player.setVelocity(direction);
         player.setFallDistance(0.0f);
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_TRIDENT_RIPTIDE_3, 1.0f, 1.0f);
+        // No API to trigger the real client-side riptide spin animation on a dry dash, so a
+        // burst of wind particles behind the player stands in for it - visible to everyone
+        // nearby, not just the angel.
+        player.getWorld().spawnParticle(Particle.GUST, player.getLocation(), 12, 0.3, 0.3, 0.3, 0.05);
     }
 }

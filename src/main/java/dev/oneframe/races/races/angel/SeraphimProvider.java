@@ -23,7 +23,8 @@ public final class SeraphimProvider implements RaceProvider {
             new AngelTridentBoostAbility(),
             new SeraphimNoArmorAbility(),
             new SeraphimNoHungerAbility(),
-            new SeraphimCleanseAuraAbility()
+            new SeraphimCleanseAuraAbility(),
+            new SeraphimFireVulnerabilityAbility()
     );
 
     @Override

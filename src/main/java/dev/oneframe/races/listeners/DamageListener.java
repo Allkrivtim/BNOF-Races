@@ -4,12 +4,14 @@ import dev.oneframe.races.core.Ability;
 import dev.oneframe.races.core.RaceManager;
 import dev.oneframe.races.core.RaceProvider;
 import dev.oneframe.races.races.angel.ArchangelNoKineticDamageAbility;
+import dev.oneframe.races.races.angel.SeraphimFireVulnerabilityAbility;
 import dev.oneframe.races.races.demon.BlazebornIgniteOnHitAbility;
 import dev.oneframe.races.races.demon.WarlockVampiricStrikeAbility;
 import dev.oneframe.races.races.demon.WarlockWitherImmunityAbility;
 import dev.oneframe.races.races.human.BlacksmithExplosionImmunityAbility;
 import dev.oneframe.races.races.human.ForesterDamageSpeedAbility;
 import dev.oneframe.races.races.merman.FuguPoisonTouchAbility;
+import dev.oneframe.races.races.monster.MorkvaldNoProjectileDamageAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -46,6 +48,10 @@ public final class DamageListener implements Listener {
             } else if (ability instanceof WarlockWitherImmunityAbility a) {
                 a.onDamage(event);
             } else if (ability instanceof ArchangelNoKineticDamageAbility a) {
+                a.onDamage(event);
+            } else if (ability instanceof SeraphimFireVulnerabilityAbility a) {
+                a.onDamage(event);
+            } else if (ability instanceof MorkvaldNoProjectileDamageAbility a) {
                 a.onDamage(event);
             }
         }

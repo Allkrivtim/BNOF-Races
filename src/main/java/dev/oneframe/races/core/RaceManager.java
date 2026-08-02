@@ -32,7 +32,7 @@ public final class RaceManager {
             PotionEffectType.WITHER, PotionEffectType.POISON, PotionEffectType.WATER_BREATHING,
             PotionEffectType.NIGHT_VISION, PotionEffectType.HASTE, PotionEffectType.SPEED,
             PotionEffectType.WEAKNESS, PotionEffectType.SATURATION, PotionEffectType.REGENERATION,
-            PotionEffectType.GLOWING
+            PotionEffectType.GLOWING, PotionEffectType.BLINDNESS, PotionEffectType.INVISIBILITY
     );
 
     private final Map<UUID, String> assignments = new ConcurrentHashMap<>();
@@ -137,6 +137,9 @@ public final class RaceManager {
         AttributeUtil.setMaxHealth(player, race.hp());
         player.setHealth(Math.min(player.getHealth() <= 0 ? race.hp() : player.getHealth(), race.hp()));
         AttributeUtil.setArmor(player, race.sp(), race.sp() / 2.0);
+        // Reset non-potion managed state before reapplying: only Echo's onApply (below) sets
+        // this back to true, so switching away from Echo leaves the player audible again.
+        player.setSilent(false);
 
         for (PotionEffectType type : MANAGED_EFFECTS) {
             if (player.hasPotionEffect(type)) {
@@ -164,6 +167,7 @@ public final class RaceManager {
         AttributeUtil.setMaxHealth(player, 20.0);
         AttributeUtil.setArmor(player, 0.0, 0.0);
         player.setHealth(Math.min(player.getHealth(), 20.0));
+        player.setSilent(false);
         for (PotionEffectType type : MANAGED_EFFECTS) {
             if (player.hasPotionEffect(type)) {
                 player.removePotionEffect(type);

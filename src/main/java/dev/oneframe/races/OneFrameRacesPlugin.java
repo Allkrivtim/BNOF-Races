@@ -23,6 +23,7 @@ import dev.oneframe.races.listeners.PlayerLifecycleListener;
 import dev.oneframe.races.listeners.PotionEffectListener;
 import dev.oneframe.races.listeners.ProjectileHitListener;
 import dev.oneframe.races.listeners.ShootBowListener;
+import dev.oneframe.races.listeners.VibrationListener;
 import dev.oneframe.races.rules.AltitudeHypoxiaRule;
 import dev.oneframe.races.rules.BarrierZoneDeathRule;
 import dev.oneframe.races.rules.DeepslateNoDropRule;
@@ -123,6 +124,7 @@ public final class OneFrameRacesPlugin extends JavaPlugin {
         pm.registerEvents(new GlideListener(raceManager), this);
         pm.registerEvents(new ArmorChangeListener(raceManager), this);
         pm.registerEvents(new FoodListener(raceManager), this);
+        pm.registerEvents(new VibrationListener(raceManager), this);
         pm.registerEvents(new InteractListener(raceManager, namedItemService), this);
         pm.registerEvents(new PlayerLifecycleListener(this, raceManager), this);
 

@@ -22,7 +22,13 @@ public final class InteractListener implements Listener {
         this.namedItemService = namedItemService;
     }
 
-    @EventHandler(ignoreCancelled = true)
+    // Deliberately NOT ignoreCancelled: on servers with other plugins/scripts (WorldGuard,
+    // Skript, etc.) a right-click-in-air can end up cancelled for reasons unrelated to us
+    // (region protection, a custom script action, ...). These are personal, non-destructive
+    // effects (self velocity, a buff), not world edits, so they should still fire even if
+    // something else already denied the "real" interaction - this fixed a real bug where the
+    // trident dash only worked when aimed at a block (RIGHT_CLICK_BLOCK), never in open air.
+    @EventHandler
     public void onInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
