@@ -10,15 +10,23 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.world.PortalCreateEvent;
 
 /**
- * Global rule 5: the End is fully locked (no platform creation, no Ender Eye activation,
- * no End-portal teleport). Nether portals are allowed - lighting a frame and the automatic
- * exit-pair creation both work (relaxed from the original spec after playtesting).
+ * Global rule 5:
+ * <ul>
+ *   <li>players can't <b>light</b> portals (CreateReason.FIRE is cancelled), but existing
+ *       portals stay usable - travel and the automatic far-side pair (NETHER_PAIR) are allowed;</li>
+ *   <li>the End remains fully locked: no obsidian platform, no Ender Eye activation, no teleport.</li>
+ * </ul>
  */
 public final class PortalLockdownRule implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPortalCreate(PortalCreateEvent event) {
-        if (event.getReason() == PortalCreateEvent.CreateReason.END_PLATFORM) {
+        PortalCreateEvent.CreateReason reason = event.getReason();
+        // FIRE = someone lit an obsidian frame; END_PLATFORM = arrival platform in the End.
+        // NETHER_PAIR (the server building the matching portal on the other side) is allowed,
+        // otherwise walking into an admin-built portal would break.
+        if (reason == PortalCreateEvent.CreateReason.FIRE
+                || reason == PortalCreateEvent.CreateReason.END_PLATFORM) {
             event.setCancelled(true);
         }
     }
@@ -31,12 +39,23 @@ public final class PortalLockdownRule implements Listener {
     }
 
     @EventHandler(ignoreCancelled = true)
-    public void onEnderEyeUse(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null) {
+    public void onInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getClickedBlock() == null
+                || event.getItem() == null) {
             return;
         }
-        boolean usingEnderEye = event.getItem() != null && event.getItem().getType() == Material.ENDER_EYE;
-        if (usingEnderEye && event.getClickedBlock().getType() == Material.END_PORTAL_FRAME) {
+        Material inHand = event.getItem().getType();
+        Material clicked = event.getClickedBlock().getType();
+
+        // Ender Eye into an End portal frame - keeps the End unreachable.
+        if (inHand == Material.ENDER_EYE && clicked == Material.END_PORTAL_FRAME) {
+            event.setCancelled(true);
+            return;
+        }
+        // Flint and steel / fire charge on obsidian - blocks lighting a nether portal at the
+        // source, before PortalCreateEvent would even fire.
+        if ((inHand == Material.FLINT_AND_STEEL || inHand == Material.FIRE_CHARGE)
+                && clicked == Material.OBSIDIAN) {
             event.setCancelled(true);
         }
     }

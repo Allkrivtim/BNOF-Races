@@ -31,7 +31,8 @@ public final class RaceManager {
             PotionEffectType.RESISTANCE, PotionEffectType.SLOWNESS, PotionEffectType.FIRE_RESISTANCE,
             PotionEffectType.WITHER, PotionEffectType.POISON, PotionEffectType.WATER_BREATHING,
             PotionEffectType.NIGHT_VISION, PotionEffectType.HASTE, PotionEffectType.SPEED,
-            PotionEffectType.WEAKNESS, PotionEffectType.SATURATION, PotionEffectType.REGENERATION
+            PotionEffectType.WEAKNESS, PotionEffectType.SATURATION, PotionEffectType.REGENERATION,
+            PotionEffectType.GLOWING
     );
 
     private final Map<UUID, String> assignments = new ConcurrentHashMap<>();

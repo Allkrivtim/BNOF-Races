@@ -15,15 +15,18 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class MermanLandSuffocationAbility implements TickAbility {
 
-    private static final int MAX_AIR = 300;
-    private static final int DRAIN_PER_PASS = 10;
+    /** Seconds of dry land before the air runs out (one tick-service pass == one second). */
+    private static final int SURFACE_SECONDS = 15;
+    private static final int MAX_AIR = SURFACE_SECONDS;
+    private static final int DRAIN_PER_PASS = 1;
     private static final double SUFFOCATION_DAMAGE = 2.0;
 
     private final Map<UUID, Integer> airLevel = new ConcurrentHashMap<>();
 
     @Override
     public String description() {
-        return "Не тонет в воде, но задыхается на суше без дождя (периодический урон при нуле кислорода).";
+        return "Не тонет в воде, но задыхается на суше без дождя: " + SURFACE_SECONDS
+                + " секунд, затем периодический урон.";
     }
 
     @Override

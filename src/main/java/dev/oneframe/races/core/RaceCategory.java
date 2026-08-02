@@ -4,6 +4,7 @@ public enum RaceCategory {
     HUMAN,
     MERMAN,
     DEMON,
+    ANGEL,
     SPECIAL,
     MONSTER
 }

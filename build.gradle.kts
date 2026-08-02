@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "dev.oneframe"
-version = "1.0.2"
+version = "1.1.0"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))

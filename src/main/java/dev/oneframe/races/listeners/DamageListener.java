@@ -3,6 +3,7 @@ package dev.oneframe.races.listeners;
 import dev.oneframe.races.core.Ability;
 import dev.oneframe.races.core.RaceManager;
 import dev.oneframe.races.core.RaceProvider;
+import dev.oneframe.races.races.angel.ArchangelNoKineticDamageAbility;
 import dev.oneframe.races.races.demon.BlazebornIgniteOnHitAbility;
 import dev.oneframe.races.races.demon.WarlockVampiricStrikeAbility;
 import dev.oneframe.races.races.demon.WarlockWitherImmunityAbility;
@@ -43,6 +44,8 @@ public final class DamageListener implements Listener {
             } else if (ability instanceof BlacksmithExplosionImmunityAbility a) {
                 a.onDamage(event);
             } else if (ability instanceof WarlockWitherImmunityAbility a) {
+                a.onDamage(event);
+            } else if (ability instanceof ArchangelNoKineticDamageAbility a) {
                 a.onDamage(event);
             }
         }

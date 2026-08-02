@@ -10,11 +10,14 @@ import dev.oneframe.races.items.NamedItemService;
 import dev.oneframe.races.items.NamedItemTransferGuardListener;
 import dev.oneframe.races.listeners.AnimationListener;
 import dev.oneframe.races.listeners.AnvilListener;
+import dev.oneframe.races.listeners.ArmorChangeListener;
 import dev.oneframe.races.listeners.BreedListener;
 import dev.oneframe.races.listeners.ConsumeListener;
 import dev.oneframe.races.listeners.DamageListener;
 import dev.oneframe.races.listeners.DeathListener;
 import dev.oneframe.races.listeners.FishingListener;
+import dev.oneframe.races.listeners.FoodListener;
+import dev.oneframe.races.listeners.GlideListener;
 import dev.oneframe.races.listeners.InteractListener;
 import dev.oneframe.races.listeners.PlayerLifecycleListener;
 import dev.oneframe.races.listeners.PotionEffectListener;
@@ -29,6 +32,7 @@ import dev.oneframe.races.rules.PortalLockdownRule;
 import dev.oneframe.races.rules.TradeLockdownRule;
 import dev.oneframe.races.storage.YamlRaceStorage;
 import dev.oneframe.races.tick.TickService;
+import dev.oneframe.races.world.HeightDatapackInstaller;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -61,6 +65,8 @@ public final class OneFrameRacesPlugin extends JavaPlugin {
 
         registerListeners(namedItemService);
         registerCommand();
+
+        HeightDatapackInstaller.installIfMissing(getLogger());
 
         getLogger().info("OneFrameRaces enabled with " + registry.all().size() + " race(s).");
     }
@@ -114,6 +120,9 @@ public final class OneFrameRacesPlugin extends JavaPlugin {
         pm.registerEvents(new ShootBowListener(raceManager), this);
         pm.registerEvents(new ProjectileHitListener(raceManager), this);
         pm.registerEvents(new DeathListener(raceManager), this);
+        pm.registerEvents(new GlideListener(raceManager), this);
+        pm.registerEvents(new ArmorChangeListener(raceManager), this);
+        pm.registerEvents(new FoodListener(raceManager), this);
         pm.registerEvents(new InteractListener(raceManager, namedItemService), this);
         pm.registerEvents(new PlayerLifecycleListener(this, raceManager), this);
 

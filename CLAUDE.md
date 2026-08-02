@@ -18,7 +18,7 @@ Paper-плагин (Java 21, Paper API `1.21.11-R0.1-SNAPSHOT`, Gradle + Shadow)
 src/main/java/dev/oneframe/races/
 ├── OneFrameRacesPlugin.java        главный класс, main из plugin.yml, собирает всё в onEnable
 ├── core/
-│   ├── RaceCategory.java           enum: HUMAN, MERMAN, DEMON, SPECIAL, MONSTER (не используется)
+│   ├── RaceCategory.java           enum: HUMAN, MERMAN, DEMON, ANGEL, SPECIAL, MONSTER (MONSTER не используется)
 │   ├── ExemptionFlag.java          enum: LOW_Y_ORE_RULE, ALTITUDE_HYPOXIA (флаги исключений из правил)
 │   ├── Ability.java                корневой маркер способности, метод description()
 │   ├── PassiveEffectAbility.java   способность = список бесконечных PotionEffect
@@ -46,6 +46,7 @@ src/main/java/dev/oneframe/races/
 │   ├── human/       ForesterProvider (+4 ability), BlacksmithProvider (+3 ability)
 │   ├── merman/      MermanShared (общая логика), MarinianProvider (+2), FuguProvider (+1)
 │   ├── demon/       BlazebornProvider (+7 ability), WarlockProvider (+3 ability)
+│   ├── angel/       AngelShared (элитры+трезубец), ArchangelProvider (+4), SeraphimProvider (+6)
 │   └── special/     SkybornProvider (только флаг), UndergroundProvider (пустая заготовка)
 ├── rules/
 │   ├── PlayerTickRule.java         интерфейс tick(player), для тиковых глобальных правил
@@ -67,7 +68,10 @@ src/main/java/dev/oneframe/races/
 │   ├── ShootBowListener.java       EntityShootBowEvent (Blazeborn flaming arrows - выстрел)
 │   ├── ProjectileHitListener.java  ProjectileHitEvent (Blazeborn flaming arrows - попадание)
 │   ├── DeathListener.java          PlayerDeathEvent (взрыв при смерти самого Blazeborn)
-│   ├── InteractListener.java       PlayerInteractEvent (активация рога Marinian)
+│   ├── GlideListener.java          EntityToggleGlideEvent (Archangel не летает горящим)
+│   ├── ArmorChangeListener.java    PlayerArmorChangeEvent (Seraphim без брони)
+│   ├── FoodListener.java           FoodLevelChangeEvent (Seraphim без голода)
+│   ├── InteractListener.java       PlayerInteractEvent (рог Marinian, рывок трезубца ангелов)
 │   └── PlayerLifecycleListener.java PlayerJoinEvent/PlayerRespawnEvent -> applyOnJoinOrRespawn (delayed 1 tick)
 ├── commands/
 │   ├── RaceCommand.java            CommandExecutor: list/info/get/set/clear/reload
@@ -80,7 +84,10 @@ src/main/java/dev/oneframe/races/
 src/main/resources/
 ├── plugin.yml                      main, api-version 1.21, команда race, оба permission
 ├── config.yml                      settings.* (4 ключа)
-└── META-INF/services/dev.oneframe.races.core.RaceProvider   8 строк built-in классов
+└── META-INF/services/dev.oneframe.races.core.RaceProvider   10 строк built-in классов
+
+src/main/java/dev/oneframe/races/world/
+└── HeightDatapackInstaller.java    ставит датапак высоты (Y=512) в world/datapacks при onEnable
 ```
 
 ## Ключевые контракты/интерфейсы
@@ -163,6 +170,9 @@ players:
 | `PlayerDeathEvent` | `DeathListener` (взрыв Blazeborn) | NORMAL | не Cancellable |
 | `PlayerDeathEvent` | `NamedItemTransferGuardListener` (зачистка именных) | NORMAL | не Cancellable |
 | `PlayerDropItemEvent` | `NamedItemTransferGuardListener` | NORMAL | true |
+| `EntityToggleGlideEvent` | `GlideListener` | NORMAL | true |
+| `PlayerArmorChangeEvent` (Paper) | `ArmorChangeListener` | NORMAL | не Cancellable (предмет снимается постфактум) |
+| `FoodLevelChangeEvent` | `FoodListener` | NORMAL | true |
 | `PlayerInteractEvent` | `InteractListener` | NORMAL | true |
 | `PlayerJoinEvent` | `PlayerLifecycleListener` | NORMAL | — |
 | `PlayerRespawnEvent` | `PlayerLifecycleListener` | **MONITOR** | — (нужно финальное состояние респавна) |
@@ -191,7 +201,7 @@ players:
 | 2 | Deepslate без дропа/опыта | `DeepslateNoDropRule` | `Listener` | Marinian, Fugu (`LOW_Y_ORE_RULE`, через `MermanShared.EXEMPTIONS`) |
 | 3 | Смерть от N секунд контакта с BARRIER (не в creative/spectator) | `BarrierZoneDeathRule` | `PlayerTickRule` | нет (не поддерживается флагом) |
 | 4 | Запрещены Silk Touch/Fortune/Luck of the Sea/Protection | `ForbiddenEnchantRule` | `Listener` + `PlayerTickRule` | именные предметы (проверка `NamedItemService.isTagged`) |
-| 5 | End закрыт (END_PLATFORM, End-телепорт, глаз Края); Nether-порталы разрешены (изменение исходного ТЗ после плейтеста) | `PortalLockdownRule` | `Listener` | нет |
+| 5 | Нельзя **поджигать** порталы (CreateReason.FIRE + кремень/огненный шар по обсидиану), но можно **входить** в существующие (NETHER_PAIR разрешён); End закрыт полностью (END_PLATFORM, телепорт, глаз Края) | `PortalLockdownRule` | `Listener` | нет |
 | 6 | Нет торговли с Villager/WanderingTrader | `TradeLockdownRule` | `Listener` | нет |
 | 7 | Форсированный ник = `getName()` каждые `enforce-names-every-ticks` тиков | `NameEnforcementRule` | `PlayerTickRule` | нет |
 
@@ -223,21 +233,23 @@ players:
 - **`RaceCommand#handleGet`** работает только для онлайн-игроков (`Bukkit.getPlayerExact`). Просмотр расы офлайн-игрока не реализован — потребовал бы дополнительного метода в `RaceManager`, читающего `races.yml` напрямую по нику/UUID через `OfflinePlayer`.
 - **`TickTaskHandle`** (возможность отмены отдельной задачи `TickService`) реализована, но **нигде не используется** — все задачи регистрируются "навсегда" (до `tickService.stop()` целиком). Пригодится, если понадобится включать/выключать отдельное глобальное правило на лету без рестарта.
 - **Защита именных предметов от передачи не абсолютна** — покрыты основные пути (клик/драг в чужой инвентарь/эндер-сундук, торговля, hopper, подбор чужого с земли) плюс периодическая зачистка раз в секунду; более экзотические пути передачи (через сторонние плагины с нестандартными инвентарями) не гарантированно перехватываются.
-- **`RaceCategory.MONSTER`** — зарезервирована, ни одна раса её не использует; упоминается только в комментариях как гипотетическое будущее исключение для правила 2.
+- **`RaceCategory.MONSTER`** — зарезервирована, ни одна раса её не использует; ТЗ на монстров пока не получено (ангелы реализованы, монстры — нет).
+- **Аура очищения Серафима (`SeraphimCleanseAuraAbility`) снимает у соседей ВСЕ эффекты, включая расовые пассивки других игроков.** Пассивки переприменяются только при входе/респавне/`/race set`, поэтому сосед-Blacksmith рядом с Серафимом теряет Strength II до перезахода. Это прямое следствие ТЗ («снимают любые эффекты окружающих игроков»); если понадобится щадящий вариант — фильтровать по списку расовых эффектов или переприменять пассивки в тиковой задаче.
+- **Голод Серафима** намеренно реализован через `setFoodLevel/setSaturation`, а не через эффект `SATURATION` — эффект снимался бы аурой другого Серафима.
 
 ## Как собрать, запустить, отладить
 
 ```bash
-./gradlew clean build            # -> build/libs/OneFrameRaces-1.0.2.jar
+./gradlew clean build            # -> build/libs/OneFrameRaces-1.1.0.jar
 ```
 
 Локальный smoke-тест (пример, использовался при разработке):
 ```bash
 # скачать Paper 1.21.11 (см. https://fill.papermc.io/v3/projects/paper/versions/1.21.11)
 echo "eula=true" > eula.txt
-cp build/libs/OneFrameRaces-1.0.2.jar plugins/
+cp build/libs/OneFrameRaces-1.1.0.jar plugins/
 java -Xmx2G -jar paper-1.21.11-*.jar --nogui
 ```
-В консоли сервера проверить: `race list`, `race info forester`, `race set <online-player> forester`, `race reload`. Ожидаемая строка при старте: `[OneFrameRaces] OneFrameRaces enabled with 8 race(s).`
+В консоли сервера проверить: `race list`, `race info forester`, `race set <online-player> forester`, `race reload`. Ожидаемая строка при старте: `[OneFrameRaces] OneFrameRaces enabled with 10 race(s).`
 
 Для отладки конкретной способности — самый быстрый путь: найти её класс в `races/<category>/`, посмотреть, из какого `listeners/*` она вызывается (обратный поиск по имени класса способности через `grep -rn ClassName src/main/java/dev/oneframe/races/listeners/`), проверить условие диспетчеризации (`instanceof`) и логику самого метода. Все тиковые способности/правила видны в одном месте — `OneFrameRacesPlugin#registerTickTasks`.

@@ -105,6 +105,13 @@ public final class NamedItemService {
                 }
                 return false;
             }
+            case ELYTRA -> {
+                if (isEmpty(eq.getChestplate())) {
+                    eq.setChestplate(tagged);
+                    return true;
+                }
+                return false;
+            }
             default -> {
                 return false;
             }

@@ -4,5 +4,7 @@ dev.oneframe.races.races.merman.MarinianProvider
 dev.oneframe.races.races.merman.FuguProvider
 dev.oneframe.races.races.demon.BlazebornProvider
 dev.oneframe.races.races.demon.WarlockProvider
+dev.oneframe.races.races.angel.ArchangelProvider
+dev.oneframe.races.races.angel.SeraphimProvider
 dev.oneframe.races.races.special.SkybornProvider
 dev.oneframe.races.races.special.UndergroundProvider
