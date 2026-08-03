@@ -10,8 +10,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityAirChangeEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /** Owns real vanilla air while a player is inside the configured high-altitude hazard. */
@@ -21,7 +21,8 @@ public final class BreathingService implements Listener {
 
     private final PluginConfig config;
     private final RaceManager raceManager;
-    private final Set<UUID> activeHazards = new HashSet<>();
+    /** Authoritative altitude air, mirrored into Player#remainingAir every server tick. */
+    private final Map<UUID, Integer> altitudeAir = new HashMap<>();
 
     public BreathingService(PluginConfig config, RaceManager raceManager) {
         this.config = config;
@@ -33,15 +34,15 @@ public final class BreathingService implements Listener {
         UUID id = player.getUniqueId();
 
         if (altitudeHazard) {
-            if (activeHazards.add(id) && player.getRemainingAir() >= player.getMaximumAir()) {
-                setAir(player, player.getMaximumAir() - 1);
-                return;
-            }
-            apply(player, BreathingCycle.drainVanillaHud(player.getRemainingAir()));
+            int maximum = Math.max(1, player.getMaximumAir());
+            int current = altitudeAir.getOrDefault(id, Math.min(player.getRemainingAir(), maximum));
+            BreathingCycle.Step step = BreathingCycle.drainVanillaHud(Math.min(current, maximum));
+            altitudeAir.put(id, step.air());
+            apply(player, step);
             return;
         }
 
-        if (activeHazards.remove(id) && !player.isUnderWater()) {
+        if (altitudeAir.remove(id) != null && !player.isUnderWater()) {
             setAir(player, player.getMaximumAir());
         }
         // Ordinary underwater breathing remains entirely vanilla when altitude is safe.
@@ -49,7 +50,7 @@ public final class BreathingService implements Listener {
 
     public void reset(Player player) {
         UUID id = player.getUniqueId();
-        if (activeHazards.remove(id)) {
+        if (altitudeAir.remove(id) != null) {
             setAir(player, player.getMaximumAir());
         }
     }
@@ -78,7 +79,8 @@ public final class BreathingService implements Listener {
     }
 
     private boolean hasAltitudeHazard(Player player) {
-        if (player.getLocation().getY() <= config.altitudeHypoxiaY()) return false;
+        if (!BreathingCycle.isAtOrAboveAltitude(
+                player.getLocation().getY(), config.altitudeHypoxiaY())) return false;
         return raceManager.getActiveRace(player)
                 .map(race -> !race.exemptionFlags().contains(ExemptionFlag.ALTITUDE_HYPOXIA))
                 .orElse(true);

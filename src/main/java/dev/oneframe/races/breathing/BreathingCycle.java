@@ -12,6 +12,10 @@ final class BreathingCycle {
         return next <= DROWNING_THRESHOLD ? new Step(0, true) : new Step(next, false);
     }
 
+    static boolean isAtOrAboveAltitude(double playerY, int thresholdY) {
+        return playerY >= thresholdY;
+    }
+
     record Step(int air, boolean damage) {
     }
 }
