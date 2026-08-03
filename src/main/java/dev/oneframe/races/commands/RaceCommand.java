@@ -182,7 +182,8 @@ public final class RaceCommand implements CommandExecutor {
         registry.reload(plugin);
         raceManager.reloadFromDisk();
         raceManager.reconcileAfterReload(Bukkit.getOnlinePlayers(), previous);
-        Msg.ok(sender, "Реестр рас перезагружен (" + registry.all().size() + " рас).");
+        Msg.ok(sender, "Реестр рас перезагружен (" + registry.all().size()
+                + " рас), гипоксия с Y=" + config.altitudeHypoxiaY() + ".");
     }
 
     private boolean isAdmin(CommandSender sender) {

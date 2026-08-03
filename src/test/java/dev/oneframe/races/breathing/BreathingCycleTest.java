@@ -17,8 +17,9 @@ class BreathingCycleTest {
 
     @Test
     void altitudeThresholdIsInclusive() {
-        assertFalse(BreathingCycle.isAtOrAboveAltitude(999.999, 1000));
-        assertTrue(BreathingCycle.isAtOrAboveAltitude(1000.0, 1000));
-        assertTrue(BreathingCycle.isAtOrAboveAltitude(1001.0, 1000));
+        int configuredThreshold = 640;
+        assertFalse(BreathingCycle.isAtOrAboveAltitude(639.999, configuredThreshold));
+        assertTrue(BreathingCycle.isAtOrAboveAltitude(640.0, configuredThreshold));
+        assertTrue(BreathingCycle.isAtOrAboveAltitude(641.0, configuredThreshold));
     }
 }
