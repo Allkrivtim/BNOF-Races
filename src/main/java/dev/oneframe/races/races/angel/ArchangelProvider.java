@@ -14,7 +14,7 @@ public final class ArchangelProvider implements RaceProvider {
     public static final String ID = "archangel";
 
     private final List<Ability> abilities = List.of(
-            new ArchangelLowAltitudeSlownessAbility(),
+            new ArchangelLowAltitudeFatigueAbility(),
             new AngelNetherFireAbility(),
             new AngelTridentBoostAbility(),
             new ArchangelNoFlyWhileBurningAbility(),
@@ -48,7 +48,7 @@ public final class ArchangelProvider implements RaceProvider {
 
     @Override
     public double sp() {
-        return 6;
+        return 0;
     }
 
     @Override

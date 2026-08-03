@@ -6,6 +6,6 @@ Damage/attack и named-item interact обрабатываются на `HIGHEST`
 
 Armor listener передаёт полный `PlayerArmorChangeEvent`. Поэтому Seraphim сразу возвращает запрещённую броню, а секундный tick дополнительно очищает уже надетую при назначении/reload. Разрешены только собственные PDC-валидные крылья, не любая Elytra.
 
-Join/respawn применение отложено на один tick и проверяет, что игрок всё ещё online. Death/transfer listeners согласуют lifecycle расовых предметов.
+Join/respawn применение отложено на один tick и проверяет, что игрок всё ещё online. `PlayerChangedWorldEvent` и `PlayerBedLeaveEvent` таким же образом запускают только refresh пассивов, без повторной установки всей расы. Quit очищает ephemeral UUID-состояние conditional-пассивов, не снимая эффекты с игрока. Death/transfer listeners согласуют lifecycle расовых предметов.
 
 `BreathingService` на `HIGHEST` не отменяет ванильный `EntityAirChangeEvent`, а заменяет итоговое значение воздуха на `current - 1`. Он выполняется после обычного `AirChangeListener`, поэтому высотная гипоксия переопределяет расовую инверсию Merman только на опасной высоте; ниже порога дыхание подводников снова полностью принадлежит их способности.

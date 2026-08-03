@@ -13,11 +13,10 @@ public final class BlazebornFireSaturationAbility implements TickAbility {
         return "Подожжён на суше - получает Saturation (бонус).";
     }
 
-    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() { return java.util.Set.of(PotionEffectType.SATURATION); }
-
     @Override
     public void tick(Player player, AbilityContext ctx) {
         if (player.getFireTicks() > 0 && !player.isInWater()) {
+            // Saturation is an instantaneous effect type, so it cannot be an infinite passive.
             player.addPotionEffect(new PotionEffect(PotionEffectType.SATURATION, 40, 0, true, false));
         }
     }

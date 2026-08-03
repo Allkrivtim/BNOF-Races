@@ -1,27 +1,26 @@
 package dev.oneframe.races.races.monster;
 
 import dev.oneframe.races.core.AbilityContext;
-import dev.oneframe.races.core.TickAbility;
+import dev.oneframe.races.core.ConditionalPassiveEffectAbility;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
-public final class MonsterNetherBlindnessAbility implements TickAbility {
+public final class MonsterNetherBlindnessAbility extends ConditionalPassiveEffectAbility {
 
-    private static final int DURATION_TICKS = 60;
+    public MonsterNetherBlindnessAbility() {
+        super(new PotionEffect(
+                PotionEffectType.BLINDNESS, PotionEffect.INFINITE_DURATION, 0, true, false));
+    }
 
     @Override
     public String description() {
         return "В Аду слепнет.";
     }
 
-    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() { return java.util.Set.of(PotionEffectType.BLINDNESS); }
-
     @Override
-    public void tick(Player player, AbilityContext ctx) {
-        if (player.getWorld().getEnvironment() == World.Environment.NETHER) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, DURATION_TICKS, 0, true, false));
-        }
+    protected boolean condition(Player player, AbilityContext ctx) {
+        return player.getWorld().getEnvironment() == World.Environment.NETHER;
     }
 }

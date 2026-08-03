@@ -7,11 +7,14 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerBedLeaveEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Applies (or reapplies) the player's persisted race on join and respawn. Both are deferred by
- * one tick so the player's attributes/health are fully settled by the server before we touch them.
+ * Applies the full persisted race on join/respawn and refreshes only passives after dimension
+ * changes or wake-up. Mutating callbacks are deferred one tick so Bukkit state is settled first.
  */
 public final class PlayerLifecycleListener implements Listener {
 
@@ -34,6 +37,27 @@ public final class PlayerLifecycleListener implements Listener {
     public void onRespawn(PlayerRespawnEvent event) {
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (event.getPlayer().isOnline()) raceManager.applyOnJoinOrRespawn(event.getPlayer());
+        });
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onChangedWorld(PlayerChangedWorldEvent event) {
+        deferPassiveRefresh(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBedLeave(PlayerBedLeaveEvent event) {
+        deferPassiveRefresh(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onQuit(PlayerQuitEvent event) {
+        raceManager.forgetPassiveRuntimeState(event.getPlayer());
+    }
+
+    private void deferPassiveRefresh(org.bukkit.entity.Player player) {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (player.isOnline()) raceManager.refreshPassiveEffects(player);
         });
     }
 }

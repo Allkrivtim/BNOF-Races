@@ -15,6 +15,9 @@ public final class SimplePassiveEffectAbility implements PassiveEffectAbility {
     public SimplePassiveEffectAbility(String description, PotionEffect... effects) {
         this.description = description;
         this.effects = List.of(effects);
+        if (this.effects.stream().anyMatch(effect -> effect.getDuration() != PotionEffect.INFINITE_DURATION)) {
+            throw new IllegalArgumentException("Static passive effects must have infinite duration");
+        }
     }
 
     @Override

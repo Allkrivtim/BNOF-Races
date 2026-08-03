@@ -1,26 +1,24 @@
 package dev.oneframe.races.races.monster;
 
 import dev.oneframe.races.core.AbilityContext;
-import dev.oneframe.races.core.TickAbility;
+import dev.oneframe.races.core.ConditionalPassiveEffectAbility;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
-public final class MorkvaldHasteBelowZeroAbility implements TickAbility {
+public final class MorkvaldHasteBelowZeroAbility extends ConditionalPassiveEffectAbility {
 
-    private static final int DURATION_TICKS = 60;
+    public MorkvaldHasteBelowZeroAbility() {
+        super(new PotionEffect(PotionEffectType.HASTE, PotionEffect.INFINITE_DURATION, 1, true, false));
+    }
 
     @Override
     public String description() {
         return "На высоте ниже Y=0 получает Haste II.";
     }
 
-    @Override public java.util.Set<PotionEffectType> ownedPotionEffects() { return java.util.Set.of(PotionEffectType.HASTE); }
-
     @Override
-    public void tick(Player player, AbilityContext ctx) {
-        if (player.getLocation().getY() < 0) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, DURATION_TICKS, 1, true, false));
-        }
+    protected boolean condition(Player player, AbilityContext ctx) {
+        return player.getLocation().getY() < 0;
     }
 }

@@ -8,9 +8,8 @@ import org.bukkit.event.entity.FoodLevelChangeEvent;
 
 /**
  * Seraphim never get hungry: the food bar is pinned full and saturation is kept topped up.
- * Deliberately NOT done with a Saturation potion effect - a nearby Seraphim's cleanse aura
- * would strip it (see {@link SeraphimCleanseAuraAbility}); raw food/saturation values are not
- * effects, so they survive.
+ * Deliberately not done with a Saturation potion effect: raw food/saturation values are stable,
+ * have no icon, and don't participate in potion-effect replacement rules.
  */
 public final class SeraphimNoHungerAbility implements TickAbility, EventAbilities.FoodChange {
 

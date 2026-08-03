@@ -46,6 +46,8 @@ import java.util.logging.Level;
 
 public final class BnofRacesPlugin extends JavaPlugin {
 
+    private static final int PASSIVE_REFRESH_TICKS = 5 * 60 * 20;
+
     private RaceRegistry registry;
     private RaceManager raceManager;
     private TickService tickService;
@@ -63,7 +65,7 @@ public final class BnofRacesPlugin extends JavaPlugin {
 
         YamlRaceStorage storage = new YamlRaceStorage(new File(getDataFolder(), "playerdata/races.yml"), getLogger());
         NamedItemService namedItemService = new NamedItemService();
-        raceManager = new RaceManager(registry, storage, namedItemService, this);
+        raceManager = new RaceManager(registry, storage, namedItemService, this, config);
         raceManager.load();
         breathingService = new BreathingService(config, raceManager);
 
@@ -102,6 +104,14 @@ public final class BnofRacesPlugin extends JavaPlugin {
         tickService.register(1, pass -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 safely(player, "breathing", () -> breathingService.tick(player));
+            }
+        });
+
+        // Registered before the one-second ability pass so Blessing can cleanse freshly
+        // refreshed negative passives during the same server tick.
+        tickService.register(PASSIVE_REFRESH_TICKS, pass -> {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                safely(player, "passive refresh", () -> raceManager.refreshPassiveEffects(player));
             }
         });
 

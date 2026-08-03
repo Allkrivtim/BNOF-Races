@@ -1,5 +1,6 @@
 package dev.oneframe.races.core;
 
+import dev.oneframe.races.config.PluginConfig;
 import dev.oneframe.races.items.NamedItemService;
 import dev.oneframe.races.storage.RaceStorage;
 import dev.oneframe.races.util.AttributeUtil;
@@ -25,7 +26,8 @@ import org.bukkit.plugin.Plugin;
 /**
  * Owns player&lt;-&gt;race assignments (in-memory + persisted), enforces per-race
  * {@code maxPlayers} occupancy, and applies/reapplies race state (attributes, potion effects,
- * named items) to a player on join, respawn, or admin assignment.
+ * named items) to a player on join, respawn, or admin assignment. Passive-only refreshes are
+ * also exposed for dimension changes, wake-up and the five-minute scheduler.
  *
  * <p>The on-disk YAML file plus this in-memory map is the sole source of truth for "who has
  * which race" - a player's PDC only ever carries a secondary debug marker, never read back
@@ -41,17 +43,20 @@ public final class RaceManager {
     private final NamedItemService namedItemService;
     private final Logger logger;
     private final Plugin plugin;
+    private final PluginConfig config;
     private final ExecutorService storageExecutor = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().daemon().name("BNOF-Races-storage").factory());
     private boolean mutationPending;
     private CompletableFuture<Boolean> pendingSave;
     private Map<UUID, String> pendingCandidate;
 
-    public RaceManager(RaceRegistry registry, RaceStorage storage, NamedItemService namedItemService, Plugin plugin) {
+    public RaceManager(RaceRegistry registry, RaceStorage storage, NamedItemService namedItemService,
+                       Plugin plugin, PluginConfig config) {
         this.registry = registry;
         this.storage = storage;
         this.namedItemService = namedItemService;
         this.plugin = plugin;
+        this.config = config;
         this.logger = plugin.getLogger();
     }
 
@@ -238,17 +243,24 @@ public final class RaceManager {
         });
     }
 
+    /** Reapplies static passives and conditionally eligible passives without resetting race state. */
+    public void refreshPassiveEffects(Player player) {
+        getActiveRace(player).ifPresent(race -> applyPassiveEffects(player, race));
+    }
+
+    /** Prevents conditional-passive transition sets from retaining offline player UUIDs. */
+    public void forgetPassiveRuntimeState(Player player) {
+        getActiveRace(player).ifPresent(race -> race.abilities().stream()
+                .filter(ConditionalPassiveEffectAbility.class::isInstance)
+                .map(ConditionalPassiveEffectAbility.class::cast)
+                .forEach(ability -> ability.forgetPlayer(player)));
+    }
+
     private void applyRace(Player player, RaceProvider race, RaceProvider previous) {
         clearRaceState(player, previous);
         AttributeUtil.applyRaceAttributes(player, race.hp(), race.sp(), race.sp() / 2.0);
         player.setHealth(Math.min(player.getHealth() <= 0 ? race.hp() : player.getHealth(), race.hp()));
-        for (Ability ability : race.abilities()) {
-            if (ability instanceof PassiveEffectAbility passive) {
-                for (PotionEffect effect : passive.passiveEffects()) {
-                    player.addPotionEffect(effect);
-                }
-            }
-        }
+        applyPassiveEffects(player, race);
 
         namedItemService.grantMissing(player, race);
 
@@ -260,6 +272,18 @@ public final class RaceManager {
         }
         if (!wasSilent && player.isSilent()) {
             player.getPersistentDataContainer().set(SILENT_MARKER, PersistentDataType.BYTE, (byte) 1);
+        }
+    }
+
+    private void applyPassiveEffects(Player player, RaceProvider race) {
+        AbilityContext ctx = new AbilityContext(0L, config, this);
+        for (Ability ability : race.abilities()) {
+            if (ability instanceof PassiveEffectAbility passive) {
+                for (PotionEffect effect : passive.passiveEffects()) player.addPotionEffect(effect);
+            }
+            if (ability instanceof ConditionalPassiveEffectAbility conditional) {
+                conditional.refreshPassiveEffects(player, ctx);
+            }
         }
     }
 
