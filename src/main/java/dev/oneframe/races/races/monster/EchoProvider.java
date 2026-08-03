@@ -45,7 +45,7 @@ public final class EchoProvider implements RaceProvider {
 
     @Override
     public Set<ExemptionFlag> exemptionFlags() {
-        return Set.of();
+        return MonsterShared.EXEMPTIONS;
     }
 
     @Override

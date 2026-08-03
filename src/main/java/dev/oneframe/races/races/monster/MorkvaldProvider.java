@@ -45,7 +45,7 @@ public final class MorkvaldProvider implements RaceProvider {
 
     @Override
     public Set<ExemptionFlag> exemptionFlags() {
-        return Set.of();
+        return MonsterShared.EXEMPTIONS;
     }
 
     @Override

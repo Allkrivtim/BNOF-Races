@@ -1,5 +1,6 @@
 package dev.oneframe.races.races.angel;
 
+import dev.oneframe.races.core.ExemptionFlag;
 import dev.oneframe.races.items.NamedItemDefinition;
 import dev.oneframe.races.util.Msg;
 import org.bukkit.Material;
@@ -8,6 +9,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Gear and behaviour shared by both angel races: bound unbreakable elytra + a named Riptide
@@ -16,6 +18,9 @@ import java.util.List;
  * destroyed on death, re-granted on respawn.
  */
 public final class AngelShared {
+
+    /** Angels fly for a living - the high-altitude hypoxia hazard doesn't apply to them. */
+    public static final Set<ExemptionFlag> EXEMPTIONS = Set.of(ExemptionFlag.ALTITUDE_HYPOXIA);
 
     public static final String ELYTRA_KEY = "angel_elytra";
 

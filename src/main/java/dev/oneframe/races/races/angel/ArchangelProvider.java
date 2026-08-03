@@ -53,7 +53,7 @@ public final class ArchangelProvider implements RaceProvider {
 
     @Override
     public Set<ExemptionFlag> exemptionFlags() {
-        return Set.of();
+        return AngelShared.EXEMPTIONS;
     }
 
     @Override
