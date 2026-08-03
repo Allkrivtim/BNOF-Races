@@ -5,7 +5,7 @@
 - Paper API `1.21.11-R0.1-SNAPSHOT`, Java 21, Gradle 8.11.
 - Публичное имя и data folder: `BNOF-Races`; версия: `2.0`.
 - Java-пакет `dev.oneframe.races` сохранён ради бинарной совместимости сторонних `RaceProvider`.
-- Итоговый файл: `build/libs/BNOF-Races-2.0.jar`.
+- Итоговые файлы: `build/libs/BNOF-Races-2.0.jar` и `build/libs/BNOF-Races-ResourcePack.zip`.
 
 ## Архитектура
 
@@ -30,8 +30,9 @@
 9. Не использовать `setNoDamageTicks(0)`: расовый урон уважает ванильные i-frames.
 10. Git не является частью сборочного процесса проекта.
 11. Merman перехватывает ванильное изменение воздуха: во влажной среде держит максимум, а на суше инвертирует восстановление в расход. Подводный полный HUD остаётся ванильным; отдельного resource pack нет.
-12. Сухой ангельский Riptide начинается через `startUsingItem`, завершается после vanilla charge threshold и включает `startRiptideAttack`; отдельного искусственного cooldown нет.
+12. Сухой ангельский Riptide начинается через `startUsingItem`, завершается после vanilla charge threshold и включает `startRiptideAttack`; успешный сухой рывок ставит cooldown предмета на 70 тиков.
 13. `BreathingService` владеет настоящим `remainingAir` только во время высотной гипоксии, начиная с config-Y включительно. Отдельного счётчика нет: `EntityAirChangeEvent` на `HIGHEST` превращает ванильное восстановление в расход `current - 1` и имеет приоритет над расовым дыханием Merman на этой высоте.
+14. `MilkRule` отменяет доение Cow/MushroomCow/Goat пустым ведром и регистрирует shaped-рецепт обычного `MILK_BUCKET`. Внешний вид и переводы ванильного ключа находятся в отдельном серверном ресурспаке.
 
 ## Датапак
 

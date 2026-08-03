@@ -40,4 +40,14 @@ tasks {
     test {
         useJUnitPlatform()
     }
+
+    val resourcePack by registering(Zip::class) {
+        from(layout.projectDirectory.dir("resourcepack/BNOF-Races"))
+        archiveFileName.set("BNOF-Races-ResourcePack.zip")
+        destinationDirectory.set(layout.buildDirectory.dir("libs"))
+    }
+
+    build {
+        dependsOn(resourcePack)
+    }
 }

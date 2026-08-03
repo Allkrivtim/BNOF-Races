@@ -1,0 +1,11 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "minecraft:custom/server-icon.png",
+      "ascent": 40,
+      "height": 64,
+      "chars": ["\u2764"]
+    }
+  ]
+}

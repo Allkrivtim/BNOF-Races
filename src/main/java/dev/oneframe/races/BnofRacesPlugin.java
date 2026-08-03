@@ -31,6 +31,7 @@ import dev.oneframe.races.rules.BarrierZoneDeathRule;
 import dev.oneframe.races.rules.DeepslateNoDropRule;
 import dev.oneframe.races.rules.ForbiddenEnchantRule;
 import dev.oneframe.races.rules.NameEnforcementRule;
+import dev.oneframe.races.rules.MilkRule;
 import dev.oneframe.races.rules.PortalLockdownRule;
 import dev.oneframe.races.rules.TradeLockdownRule;
 import dev.oneframe.races.storage.YamlRaceStorage;
@@ -75,6 +76,7 @@ public final class BnofRacesPlugin extends JavaPlugin {
 
         registerListeners(namedItemService);
         registerCommand();
+        MilkRule.registerRecipe(this);
 
         HeightDatapackInstaller.install(this, config.heightDatapackEnabled());
 
@@ -92,6 +94,7 @@ public final class BnofRacesPlugin extends JavaPlugin {
         if (raceManager != null) {
             raceManager.shutdownAndSave();
         }
+        MilkRule.unregisterRecipe();
     }
 
     private void registerTickTasks(NamedItemService namedItemService) {
@@ -160,6 +163,7 @@ public final class BnofRacesPlugin extends JavaPlugin {
         pm.registerEvents(new DeepslateNoDropRule(raceManager), this);
         pm.registerEvents(new PortalLockdownRule(), this);
         pm.registerEvents(new TradeLockdownRule(), this);
+        pm.registerEvents(new MilkRule(), this);
         pm.registerEvents(new NamedItemTransferGuardListener(namedItemService), this);
     }
 

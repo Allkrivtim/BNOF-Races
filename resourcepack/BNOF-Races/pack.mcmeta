@@ -1,0 +1,10 @@
+{
+  "pack": {
+    "description": "BNOF Texture Pack",
+    "pack_format": 88,
+    "supported_formats": {
+      "min_inclusive": 15,
+      "max_inclusive": 99
+    }
+  }
+}

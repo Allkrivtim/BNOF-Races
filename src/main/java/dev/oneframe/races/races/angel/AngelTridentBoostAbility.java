@@ -18,13 +18,14 @@ public final class AngelTridentBoostAbility implements EventAbilities.NamedItemI
     public static final String ITEM_KEY = "angel_trident";
     private static final int MIN_CHARGE_TICKS = 10;
     private static final int SPIN_DURATION_TICKS = 20;
+    private static final int DRY_COOLDOWN_TICKS = 70;
     private static final float SPIN_ATTACK_STRENGTH = 8.0f;
     // Vanilla 1.21.11 riptide data: 1.5 + 0.75 per level above the first = 3.0 at level III.
     private static final double RIPTIDE_III_STRENGTH = 3.0;
 
     @Override
     public String description() {
-        return "Именной трезубец с Тягуном III: полноценный ванильный Riptide работает и без воды/дождя.";
+        return "Именной трезубец с Тягуном III: Riptide работает без воды/дождя с кулдауном 3,5 секунды.";
     }
 
     @Override
@@ -39,7 +40,8 @@ public final class AngelTridentBoostAbility implements EventAbilities.NamedItemI
 
     @Override
     public void onNamedItemInteract(Player player, ItemStack item) {
-        if (isWet(player) || player.hasActiveItem() || player.isRiptiding()) {
+        if (isWet(player) || player.hasActiveItem() || player.isRiptiding()
+                || player.hasCooldown(item)) {
             return;
         }
         EquipmentSlot hand;
@@ -56,7 +58,7 @@ public final class AngelTridentBoostAbility implements EventAbilities.NamedItemI
     @Override
     public void onStopUsingNamedItem(Player player, PlayerStopUsingItemEvent event) {
         if (isWet(player) || event.getTicksHeldFor() < MIN_CHARGE_TICKS
-                || player.isRiptiding()) {
+                || player.isRiptiding() || player.hasCooldown(event.getItem())) {
             return;
         }
 
@@ -72,6 +74,7 @@ public final class AngelTridentBoostAbility implements EventAbilities.NamedItemI
         player.startRiptideAttack(SPIN_DURATION_TICKS, SPIN_ATTACK_STRENGTH, event.getItem());
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_TRIDENT_RIPTIDE_3, 1.0f, 1.0f);
         player.incrementStatistic(Statistic.USE_ITEM, event.getItem().getType());
+        player.setCooldown(event.getItem(), DRY_COOLDOWN_TICKS);
     }
 
     private boolean isWet(Player player) {
