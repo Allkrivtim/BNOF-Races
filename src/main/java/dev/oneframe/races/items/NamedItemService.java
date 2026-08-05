@@ -249,6 +249,10 @@ public final class NamedItemService {
         // Arrays.asList, not List.of: inventory contents contain null for empty slots,
         // and List.of throws NPE on null elements.
         List<ItemStack> stacks = new ArrayList<>(Arrays.asList(player.getInventory().getContents()));
+        // An item being moved is temporarily held by the inventory view rather than an inventory
+        // slot. Counting the cursor prevents the one-second reconciliation from granting a
+        // duplicate and later deleting the copy the player just placed in a new slot.
+        stacks.add(player.getItemOnCursor());
         EntityEquipment eq = player.getEquipment();
         if (eq != null) {
             stacks.add(eq.getHelmet());

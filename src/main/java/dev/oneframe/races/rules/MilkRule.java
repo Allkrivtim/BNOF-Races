@@ -26,11 +26,12 @@ public final class MilkRule implements Listener {
         Bukkit.removeRecipe(RECIPE_KEY);
 
         ShapedRecipe recipe = new ShapedRecipe(RECIPE_KEY, new ItemStack(Material.MILK_BUCKET));
-        recipe.shape("PBG", " A ");
-        recipe.setIngredient('P', Material.PRISMARINE_SHARD);
+        recipe.shape(" M ", "CBT", " R ");
+        recipe.setIngredient('M', Material.PHANTOM_MEMBRANE);
+        recipe.setIngredient('C', Material.TUBE_CORAL);
         recipe.setIngredient('B', Material.GLASS_BOTTLE);
-        recipe.setIngredient('G', Material.BLAZE_ROD);
-        recipe.setIngredient('A', Material.AMETHYST_CLUSTER);
+        recipe.setIngredient('T', Material.GHAST_TEAR);
+        recipe.setIngredient('R', Material.REDSTONE);
 
         if (!Bukkit.addRecipe(recipe)) {
             plugin.getLogger().warning("Could not register the Tear of Purity milk recipe.");

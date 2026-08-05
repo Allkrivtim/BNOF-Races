@@ -7,6 +7,6 @@
 - `PortalLockdownRule`: запрещает создание новых порталов, End platform, Ender Eye и любой teleport с destination в THE_END. Обычное использование огнива по obsidian не отменяется заранее.
 - `TradeLockdownRule`: блокирует только Villager/WanderingTrader, не произвольные custom Merchant GUI.
 - `NameEnforcementRule`: пишет display/list name только при фактическом отличии.
-- `MilkRule`: блокирует доение коров, муухоморов и коз пустым ведром и регистрирует рецепт `PBG / _A_`, где используются prismarine shard, glass bottle, blaze rod и amethyst cluster; результат — обычный milk bucket.
+- `MilkRule`: блокирует доение коров, муухоморов и коз пустым ведром и регистрирует рецепт `_M_ / CBT / _R_`, где `M` — phantom membrane, `C` — живой tube coral, `B` — glass bottle, `T` — ghast tear, `R` — redstone dust; результат — обычный milk bucket.
 
 Правила, которые работают в heartbeat, изолированы друг от друга. Concurrent-коллекции не используются там, где доступ строго однопоточный.

@@ -23,4 +23,9 @@ public final class ArchangelLowAltitudeFatigueAbility extends ConditionalPassive
     protected boolean condition(Player player, AbilityContext ctx) {
         return player.getLocation().getY() < ctx.config().archangelFatigueBelowY();
     }
+
+    @Override
+    protected boolean removeEffectsWhenConditionEnds() {
+        return true;
+    }
 }

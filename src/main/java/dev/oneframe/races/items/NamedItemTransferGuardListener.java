@@ -44,29 +44,34 @@ public final class NamedItemTransferGuardListener implements Listener {
         boolean containerOpen = top.getType() != InventoryType.CRAFTING;
         boolean clickedTop = event.getRawSlot() >= 0 && event.getRawSlot() < top.getSize();
 
-        if (containerOpen) {
-            // Placing a tagged item from the cursor into the open container.
-            if (clickedTop && namedItemService.isManagedItem(cursor)) {
-                event.setCancelled(true);
-                return;
-            }
-            // Shift-clicking a tagged item out of the player inventory into the container.
-            if (event.isShiftClick() && namedItemService.isManagedItem(current)) {
-                event.setCancelled(true);
-                return;
-            }
-            // Number-key swap moving a tagged hotbar item into the clicked container slot.
-            if (clickedTop && event.getHotbarButton() >= 0
-                    && namedItemService.isManagedItem(event.getWhoClicked().getInventory().getItem(event.getHotbarButton()))) {
-                event.setCancelled(true);
-                return;
-            }
-            // Offhand-swap key pushing a tagged offhand item into the clicked container slot.
-            if (clickedTop && event.getClick() == ClickType.SWAP_OFFHAND
-                    && namedItemService.isManagedItem(event.getWhoClicked().getInventory().getItemInOffHand())) {
-                event.setCancelled(true);
-                return;
-            }
+        // The ordinary player inventory contains no foreign destination. Movement between its
+        // storage, hotbar, offhand and equipment slots must remain unrestricted; dropping is
+        // guarded separately by PlayerDropItemEvent.
+        if (!containerOpen) {
+            return;
+        }
+
+        // Placing a tagged item from the cursor into the open container.
+        if (clickedTop && namedItemService.isManagedItem(cursor)) {
+            event.setCancelled(true);
+            return;
+        }
+        // Shift-clicking a tagged item out of the player inventory into the container.
+        if (event.isShiftClick() && namedItemService.isManagedItem(current)) {
+            event.setCancelled(true);
+            return;
+        }
+        // Number-key swap moving a tagged hotbar item into the clicked container slot.
+        if (clickedTop && event.getHotbarButton() >= 0
+                && namedItemService.isManagedItem(event.getWhoClicked().getInventory().getItem(event.getHotbarButton()))) {
+            event.setCancelled(true);
+            return;
+        }
+        // Offhand-swap key pushing a tagged offhand item into the clicked container slot.
+        if (clickedTop && event.getClick() == ClickType.SWAP_OFFHAND
+                && namedItemService.isManagedItem(event.getWhoClicked().getInventory().getItemInOffHand())) {
+            event.setCancelled(true);
+            return;
         }
 
         Inventory target = event.getClickedInventory();

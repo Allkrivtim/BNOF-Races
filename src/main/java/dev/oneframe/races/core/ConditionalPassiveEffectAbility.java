@@ -12,9 +12,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * An infinite passive that is granted when a condition becomes true, but intentionally remains
+ * An infinite passive that is granted when a condition becomes true and, by default, remains
  * after the condition becomes false. Milk, effect clear and other cleanses therefore persist
- * until the next false-to-true transition or an explicit lifecycle/five-minute refresh.
+ * until the next false-to-true transition or an explicit lifecycle/five-minute refresh. Strict
+ * environmental penalties can opt into removal when their condition ends.
  */
 public abstract class ConditionalPassiveEffectAbility implements TickAbility {
 
@@ -30,6 +31,14 @@ public abstract class ConditionalPassiveEffectAbility implements TickAbility {
 
     protected abstract boolean condition(Player player, AbilityContext ctx);
 
+    /**
+     * Most conditional race passives intentionally survive after their condition ends. Abilities
+     * with a strict environmental penalty can opt into removing their effects on exit.
+     */
+    protected boolean removeEffectsWhenConditionEnds() {
+        return false;
+    }
+
     /** Additional per-pass behavior such as direct damage or setting the player on fire. */
     protected void onPass(Player player, AbilityContext ctx, boolean conditionMet) {
     }
@@ -41,7 +50,8 @@ public abstract class ConditionalPassiveEffectAbility implements TickAbility {
         if (conditionMet) {
             if (playersInsideCondition.add(id)) apply(player);
         } else {
-            playersInsideCondition.remove(id);
+            boolean conditionJustEnded = playersInsideCondition.remove(id);
+            if (conditionJustEnded && removeEffectsWhenConditionEnds()) remove(player);
         }
         onPass(player, ctx, conditionMet);
     }
@@ -55,6 +65,9 @@ public abstract class ConditionalPassiveEffectAbility implements TickAbility {
             apply(player);
         } else {
             playersInsideCondition.remove(id);
+            // A lifecycle refresh also cleans a persisted penalty after reconnect/restart even
+            // though the in-memory transition state no longer exists.
+            if (removeEffectsWhenConditionEnds()) remove(player);
         }
     }
 
@@ -75,5 +88,9 @@ public abstract class ConditionalPassiveEffectAbility implements TickAbility {
 
     private void apply(Player player) {
         for (PotionEffect effect : effects) player.addPotionEffect(effect);
+    }
+
+    private void remove(Player player) {
+        for (PotionEffect effect : effects) player.removePotionEffect(effect.getType());
     }
 }
